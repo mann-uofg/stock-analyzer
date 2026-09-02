@@ -604,15 +604,23 @@ def summarise(readings: list[Reading], subject: str = "this stock") -> str:
     bad = len([r for r in usable if r.tone == BAD])
     warn = len([r for r in usable if r.tone == WARN])
     total = len(usable)
+    flagged = bad + warn
+    neutral = total - good - flagged
 
-    if bad == 0 and warn == 0:
-        return (f"All {total} measures here read positively or neutrally for "
-                f"{subject} — nothing on this panel is flashing a warning.")
-    if good > (bad + warn):
-        return (f"{good} of {total} measures look encouraging, with "
-                f"{bad + warn} worth a closer look below.")
-    if (bad + warn) > good:
-        return (f"{bad + warn} of {total} measures here are cautionary against "
+    if flagged == 0:
+        return (f"Nothing here is flashing a warning for {subject} — all "
+                f"{total} measures read positively or normally.")
+    # Saying "1 encouraging and 1 cautionary out of 7" hides the five that were
+    # simply unremarkable, which is itself the useful finding.
+    if neutral >= good + flagged:
+        only = "only " if flagged == 1 else ""
+        return (f"Mostly unremarkable: {neutral} of {total} measures sit in "
+                f"normal territory, with {only}{flagged} worth a closer look.")
+    if good > flagged:
+        return (f"{good} of {total} measures look encouraging, with {flagged} "
+                f"worth a closer look below.")
+    if flagged > good:
+        return (f"{flagged} of {total} measures here are cautionary against "
                 f"{good} encouraging — the concerns are listed first.")
-    return (f"Mixed: {good} encouraging and {bad + warn} cautionary out of "
-            f"{total} measures.")
+    return (f"Evenly split for {subject}: {good} encouraging, {flagged} "
+            f"cautionary, {neutral} unremarkable.")

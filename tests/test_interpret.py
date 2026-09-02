@@ -164,3 +164,14 @@ class TestGrouping:
     def test_all_clear_summary_says_so(self):
         clean = I.read_many([("sharpe", 2.5), ("rsi_14", 60)])
         assert "nothing" in I.summarise(clean).lower()
+
+    def test_mostly_neutral_says_so_rather_than_calling_it_mixed(self):
+        # The live NVDA reading: five unremarkable measures and one flag.
+        # Reporting that as "1 encouraging, 1 cautionary" buried the finding.
+        live = I.read_many([
+            ("atr_percent", 3.37), ("rsi_14", 57.1), ("stoch_k", 76.8),
+            ("cci_20", 73), ("adx_14", 15.9), ("bb_percent_b", 0.77),
+            ("volume_ratio", 0.85),
+        ])
+        text = I.summarise(live, "the chart")
+        assert "unremarkable" in text and "5 of 7" in text
