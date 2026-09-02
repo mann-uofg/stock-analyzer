@@ -29,15 +29,24 @@ session, so holdings are never written to a server other people can reach.
 
 Community Cloud's free tier gives **one private app**, unlimited public ones,
 about **1 GB of memory**, and sleeps an app after 12 hours idle — it wakes on
-the next visit. There are no custom domains; the URL will look like
-`stock-analyzer-<something>.streamlit.app`.
+the next visit. There are no custom domains, so the URL is assigned:
+
+<https://mann-uofg-stock-analyzer-app-yndwjm.streamlit.app>
+
+Pushing to `main` redeploys on its own; there is no separate deploy step.
 
 ### What this costs you in privacy
 
 With a cloud key set, the analysis payload — tickers, positions, prices — is
 sent to ollama.com for the write-up. Market data already comes from Yahoo
-either way. Leave the key unset and the app falls back to a local model, in
-which case nothing leaves the machine but your laptop does the work.
+either way.
+
+The local-model fallback still works, but only if you have pulled a model:
+`ollama pull qwen3.5:9b`. Without one, and without a key, the deterministic
+engine still produces the full verdict, scores and trade plan — you lose the
+written narrative, nothing else. The numbers were never the model's to begin
+with; it explains them, and the validator checks its arithmetic against the
+engine either way.
 
 On a shared host your watchlist and holdings live **in the browser session
 only**. Use *Save / restore your data* in the sidebar to download them as a
