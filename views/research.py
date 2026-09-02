@@ -8,7 +8,7 @@ from typing import Any
 import pandas as pd
 import streamlit as st
 
-from analyzer import charts, horizon, llm, patterns, sizing, store
+from analyzer import charts, horizon, llm, modelbench, patterns, sizing, store
 from analyzer.datafeed import DataError
 
 from .common import (
@@ -55,6 +55,15 @@ def _controls() -> dict[str, Any]:
             )
             ok, detail = llm.available()
             st.caption(detail if ok else f"Unavailable — {detail}")
+
+            # The benchmark lives here as well as in scripts/ because once the
+            # app is deployed the API key is in Streamlit secrets and there is
+            # no shell to run a script from.
+            if llm.provider() == "cloud":
+                if st.button("Which model is best?", width="stretch",
+                             help="Sends each candidate the real prompt and "
+                                  "scores its JSON and arithmetic."):
+                    st.session_state["_run_bench"] = True
 
         with st.expander("Position sizing"):
             settings = store.load_settings()
@@ -260,6 +269,9 @@ def render() -> None:
     horizons = horizon.compute(payload)
     _header(payload, call, horizons)
 
+    if st.session_state.pop("_run_bench", False):
+        _model_benchmark(payload)
+
     # The symbol has already been validated by a successful fetch here, so it
     # goes on the watchlist as typed.
     in_watchlist = symbol in store.watchlist_symbols()
@@ -337,6 +349,61 @@ def render() -> None:
             data=json.dumps({**payload, "narrative": narrative}, indent=2, default=str),
             file_name=f"{symbol}_analysis.json", mime="application/json",
         )
+
+
+def _model_benchmark(payload: dict) -> None:
+    """Score the cloud candidates on this ticker, live.
+
+    Deliberately measured rather than argued: which model is best for this job
+    depends on JSON reliability and arithmetic, not on general ability, and
+    that is only knowable by running it.
+    """
+    st.header("Which cloud model should you use?")
+    st.caption(
+        f"Each candidate gets the same prompt the app sends for "
+        f"{payload['meta']['ticker']}, and its answer goes through the same "
+        "validator that guards your trade plan — with repair off, so this is "
+        "what the model got right unaided. Runs serially; allow a few minutes."
+    )
+
+    table = st.empty()
+    rows: list[dict] = []
+
+    def _render() -> None:
+        frame = pd.DataFrame([{
+            "Model": r["model"],
+            "Valid JSON": "yes" if r["valid_json"] else "no",
+            "Fields": f"{r['fields']}/{len(modelbench.REQUIRED_FIELDS)}",
+            "Arithmetic": "passed" if r["arithmetic"] else "failed",
+            "R:R": r["risk_reward"],
+            "Seconds": r["seconds"],
+            "Note": r["note"][:60],
+        } for r in rows])
+        table.dataframe(frame, width="stretch", hide_index=True)
+
+    progress = st.progress(0.0)
+    for index, model in enumerate(modelbench.CANDIDATES, start=1):
+        rows.append(modelbench.run_one(
+            model, modelbench.SYSTEM_PROMPT_AUTHORITY,
+            modelbench.build_user_prompt(payload, authority=True),
+            payload.get("quote", {}).get("spot") or 0.0,
+        ))
+        _render()
+        progress.progress(index / len(modelbench.CANDIDATES))
+    progress.empty()
+
+    verdict = modelbench.recommend(rows)
+    if verdict["model"]:
+        html(finding(
+            "good", f"Use {verdict['model']}", verdict["reason"],
+        ))
+        st.code(f'OLLAMA_CLOUD_MODEL = "{verdict["model"]}"', language="toml")
+        st.caption(
+            "Put that in your .env locally, or in Streamlit secrets on the "
+            "deployed app, then reload."
+        )
+    else:
+        html(finding("warning", "No clear winner", verdict["reason"]))
 
 
 def _patterns_tab(price_df) -> None:
