@@ -8,6 +8,7 @@ import streamlit as st
 from analyzer import horizon, portfolio as pf, store
 
 from .common import (
+    escape,
     REFRESH_SECONDS,
     coerce_numeric,
     dash_column,
@@ -113,8 +114,8 @@ def _table(symbols: tuple[str, ...], horizon_key: str, notes: dict[str, str]) ->
         rich.append({
             "weight_pct": score,
             "cells": (
-                f"<div><div class='row-sym'>{row['symbol']}</div>"
-                f"<div class='row-name'>{(row.get('name') or '')[:22]}</div></div>"
+                f"<div><div class='row-sym'>{escape(row['symbol'])}</div>"
+                f"<div class='row-name'>{escape((row.get('name') or '')[:22])}</div></div>"
                 f"<div>{sparkline(sparks.get(row['symbol']))}</div>"
                 f"<div><div class='row-num'>{fmt(row.get('price'))}</div>"
                 f"<div class='row-sub {tone}'>{fmt(change, 2, '%', signed=True)}</div></div>"

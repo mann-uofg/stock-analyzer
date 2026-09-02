@@ -21,7 +21,17 @@ import streamlit as st
 
 from analyzer import datafeed, newsfeed, store
 
-from .common import REFRESH_SECONDS, finding, fmt, html, quote, stat, stat_grid
+from .common import (
+    REFRESH_SECONDS,
+    escape,
+    finding,
+    fmt,
+    html,
+    quote,
+    safe_href,
+    stat,
+    stat_grid,
+)
 
 # The macro proxies. VIX is the market's own read on how frightened it is.
 MARKET_SYMBOLS = ("^GSPC", "^IXIC", "^VIX")
@@ -127,20 +137,25 @@ def _headline(item: dict) -> str:
 
     tickers = "".join(
         f"<span class='pill {'buy' if item.get('owned') else 'hold'}' "
-        f"style='margin-right:.3rem'>{s}</span>"
+        f"style='margin-right:.3rem'>{escape(s)}</span>"
         for s in item["symbols"][:4]
     )
     extra = (f"<span class='row-sub'>+{len(item['symbols']) - 4} more</span>"
              if len(item["symbols"]) > 4 else "")
 
-    who = f" · <b>{item['matched']}</b>" if item.get("matched") else ""
-    link = item.get("link")
+    # Every field below is third-party text from a news feed, rendered through
+    # unsafe_allow_html - it is escaped without exception, and the link is
+    # scheme-checked so a javascript: URL cannot reach an href.
+    who = f" · <b>{escape(item['matched'])}</b>" if item.get("matched") else ""
+    link = safe_href(item.get("link"))
+    heading = escape(item["title"])
     title = (
-        f"<a href='{link}' target='_blank' style='color:inherit;"
-        f"text-decoration:none'>{item['title']}</a>" if link else item["title"]
+        f"<a href='{link}' target='_blank' rel='noopener noreferrer' "
+        f"style='color:inherit;text-decoration:none'>{heading}</a>"
+        if link else heading
     )
     summary = (
-        f"<div class='finding-detail'>{item['summary'][:170]}…</div>"
+        f"<div class='finding-detail'>{escape(item['summary'][:170])}…</div>"
         if item.get("summary") else ""
     )
     level = ("critical" if item.get("bucket") == "policy"

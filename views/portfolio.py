@@ -25,6 +25,7 @@ from analyzer import (
 )
 
 from .common import (
+    escape,
     REFRESH_SECONDS,
     allocation_bar,
     finding,
@@ -336,8 +337,8 @@ def _analysis(positions: tuple[dict, ...]) -> None:
         rich.append({
             "weight_pct": row.get("weight_pct"),
             "cells": (
-                f"<div><div class='row-sym'>{row['symbol']}</div>"
-                f"<div class='row-name'>{(info.get('name') or '')[:22]}</div></div>"
+                f"<div><div class='row-sym'>{escape(row['symbol'])}</div>"
+                f"<div class='row-name'>{escape((info.get('name') or '')[:22])}</div></div>"
                 f"<div>{sparkline(sparks.get(row['symbol']))}</div>"
                 f"<div><div class='row-num'>{fmt(row.get('price'))}</div>"
                 f"<div class='row-sub'>{row.get('currency') or ''}</div></div>"

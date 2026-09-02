@@ -126,10 +126,46 @@ def since(iso: str | None) -> str:
 
 
 def _escape(text: Any) -> str:
-    """Minimal HTML escaping for values interpolated into components."""
+    """HTML-escape a value before it is interpolated into markup.
+
+    Quotes are escaped as well as angle brackets: these components are built as
+    f-strings with single-quoted attributes, so an apostrophe in a company name
+    would otherwise close the attribute early - which is both a rendering bug
+    and the opening an injected handler needs.
+    """
     return (
-        str(text).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+        str(text)
+        .replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace('"', "&quot;")
+        .replace("'", "&#39;")
     )
+
+
+# Public alias: views escape untrusted text with this.
+escape = _escape
+
+
+# Everything rendered through these components is third-party text: headlines
+# and company names from Yahoo, and ticker symbols typed by whoever is using
+# the app. None of it is trustworthy, and Streamlit's unsafe_allow_html means
+# an unescaped angle bracket is executable markup.
+def safe_href(url: Any) -> str | None:
+    """Return a link only if it is a plain http(s) URL.
+
+    Blocks ``javascript:``, ``data:`` and similar schemes, and rejects anything
+    containing a quote or angle bracket that could terminate the attribute and
+    inject a new one.
+    """
+    if not url:
+        return None
+    candidate = str(url).strip()
+    if not candidate.lower().startswith(("http://", "https://")):
+        return None
+    if any(ch in candidate for ch in "\"'<>` \n\r\t"):
+        return None
+    return _escape(candidate)
 
 
 def verdict_chip(verdict: str | None, subtitle: str = "") -> str:

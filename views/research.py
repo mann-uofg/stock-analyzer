@@ -15,6 +15,7 @@ from .common import (
     analyse,
     coerce_numeric,
     big,
+    escape,
     finding,
     fmt,
     md_safe,
@@ -121,10 +122,13 @@ def _header(payload: dict, call: dict, horizons: dict) -> None:
     left, right = st.columns([3, 1.2])
     with left:
         bits = [profile.get("name"), profile.get("sector"), profile.get("industry")]
+        # Ticker is typed by the user and the profile fields come from Yahoo;
+        # both are rendered through unsafe_allow_html, so both are escaped.
         html(
-            f"<div class='hero-name'><h1>{payload['meta']['ticker']}</h1>"
+            f"<div class='hero-name'><h1>{escape(payload['meta']['ticker'])}</h1>"
             f"<span class='hero-price num'>{fmt(quote_block.get('spot'))}</span></div>"
-            f"<div class='hero-sub'>{' · '.join(b for b in bits if b)}</div>"
+            f"<div class='hero-sub'>"
+            f"{' · '.join(escape(b) for b in bits if b)}</div>"
         )
     with right:
         html(verdict_chip(
