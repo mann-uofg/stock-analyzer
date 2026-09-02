@@ -53,13 +53,15 @@ class Settings:
     ollama_cloud_host: str = field(
         default_factory=lambda: os.getenv("OLLAMA_CLOUD_HOST", "https://ollama.com").strip()
     )
-    # A current-generation model, not the largest available. The free tier
-    # meters GPU time, so a frontier 1T model would drain the quota in a
-    # handful of notes; this workload needs reliable JSON and correct
-    # arithmetic rather than maximum capability. Run
-    # scripts/compare_models.py to pick empirically for your own usage.
+    # Chosen by measurement, not by reputation. Benchmarked against seven
+    # alternatives on this app's real prompt (scripts/compare_models.py): the
+    # newer and larger models - glm-5.3, deepseek-v4, kimi-k2.6, qwen3.5:397b -
+    # all return HTTP 402 on the free tier, and nemotron-3-super truncated its
+    # JSON. gpt-oss:120b was the only candidate to produce a complete
+    # nineteen-field answer with arithmetic that passed validation unaided,
+    # in 7.6s. Re-run the benchmark if the free-tier line-up changes.
     ollama_cloud_model: str = field(
-        default_factory=lambda: os.getenv("OLLAMA_CLOUD_MODEL", "glm-5.3").strip()
+        default_factory=lambda: os.getenv("OLLAMA_CLOUD_MODEL", "gpt-oss:120b").strip()
     )
     ollama_host: str = field(
         default_factory=lambda: os.getenv("OLLAMA_HOST", "http://localhost:11434").strip()

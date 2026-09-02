@@ -20,7 +20,7 @@ written up by an LLM.
 
 ```toml
 OLLAMA_API_KEY = "your-key-here"
-OLLAMA_CLOUD_MODEL = "glm-5.3"
+OLLAMA_CLOUD_MODEL = "gpt-oss:120b"
 STOCK_ANALYZER_SHARED = "1"
 ```
 
@@ -80,9 +80,24 @@ arithmetic passed unaided, and latency. Then set the winner:
 OLLAMA_CLOUD_MODEL=<whatever won>
 ```
 
-Current candidates worth trying, heaviest first: `deepseek-v4-pro:0813`,
-`kimi-k3`, `mistral-large-3:675b` · `glm-5.3`, `qwen3.5:397b`,
-`nemotron-3-super` · `glm-5.3-flash`, `deepseek-v4-flash:0731`.
+**Measured result (2 Sept 2026, free tier):**
+
+| Model | Reachable | Valid JSON | Arithmetic | Time |
+|---|---|---|---|---|
+| **gpt-oss:120b** | yes | 17/17 | **passed** (R:R 2.18) | **7.6s** |
+| nemotron-3-super | yes | truncated | — | 45.5s |
+| glm-5.3, glm-5.3-flash | **402 — paid** | — | — | — |
+| deepseek-v4-pro / -flash | **402 — paid** | — | — | — |
+| kimi-k2.6, qwen3.5:397b | **402 — paid** | — | — | — |
+
+Two things that only measuring reveals: most of the newer, larger models are
+**not on the free tier at all** — they return HTTP 402 regardless of how good
+they are. And of the two that were reachable, the one that worked did so in
+7.6 seconds, roughly twenty times faster than the 9B this replaced.
+
+`nemotron-3-super` is free and failed only by truncating its JSON, so it may
+pass with a larger `OLLAMA_NUM_PREDICT`. Worth a retry if you ever want an
+alternative.
 
 ### Which model runs the write-up
 

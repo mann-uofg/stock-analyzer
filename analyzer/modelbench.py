@@ -28,18 +28,20 @@ from .prompts import (
     build_user_prompt,
 )
 
-# A spread across current generations: frontier, balanced, light. The free tier
-# meters GPU time, so the lighter ones are not merely a fallback - if one of
-# them passes, it is usually the better daily default.
+# Ordered cheapest-first. Measured on 2026-09-02: everything above
+# nemotron-3-super returned HTTP 402 on the free tier, so the paid models are
+# kept last - they are worth re-testing only if the plan changes.
 CANDIDATES: tuple[str, ...] = (
-    "deepseek-v4-pro:0813",
-    "kimi-k2.6",
-    "glm-5.3",
-    "qwen3.5:397b",
-    "nemotron-3-super",
-    "glm-5.3-flash",
-    "deepseek-v4-flash:0731",
+    "gpt-oss:20b",
     "gpt-oss:120b",
+    "nemotron-3-nano:30b",
+    "nemotron-3-super",
+    "gemma4:31b",
+    # Paid tiers as of the last run; listed so the benchmark reports it
+    # explicitly rather than leaving you to wonder.
+    "glm-5.3-flash",
+    "glm-5.3",
+    "deepseek-v4-flash:0731",
 )
 
 REQUIRED_FIELDS: list[str] = OUTPUT_SCHEMA_AUTHORITY["required"]
@@ -51,6 +53,7 @@ def run_one(model: str, system: str, user: str, price: float,
     result: dict[str, Any] = {
         "model": model, "ok": False, "seconds": None, "valid_json": False,
         "fields": 0, "arithmetic": False, "risk_reward": None, "note": "",
+        "unavailable": False,
     }
     if not SETTINGS.ollama_cloud_key:
         result["note"] = "no API key set"
@@ -78,6 +81,16 @@ def run_one(model: str, system: str, user: str, price: float,
 
     result["seconds"] = round(time.time() - started, 1)
 
+    if response.status_code == 402:
+        # Not a failure of the model - it is simply not on this plan. Recorded
+        # separately so it never counts against a candidate's reliability.
+        result["unavailable"] = True
+        result["note"] = "not on the free tier (402)"
+        return result
+    if response.status_code == 429:
+        result["unavailable"] = True
+        result["note"] = "quota reached (429)"
+        return result
     if response.status_code != 200:
         result["note"] = f"HTTP {response.status_code}: {response.text[:90]}"
         return result
@@ -143,14 +156,25 @@ def recommend(rows: list[dict[str, Any]]) -> dict[str, Any]:
     quota for nothing.
     """
     passing = [r for r in rows if r["ok"] and r["arithmetic"]]
+    # Models your plan cannot reach were never really candidates, so they are
+    # excluded from the denominator - "1 of 8" reads as though seven models
+    # failed when six were never tried.
+    tried = [r for r in rows if not r.get("unavailable")]
+    blocked = [r for r in rows if r.get("unavailable")]
     if passing:
         best = min(passing, key=lambda r: r["seconds"] or 1e9)
+        blocked_note = (
+            f" {len(blocked)} {'was' if len(blocked) == 1 else 'were'} "
+            "unavailable on your plan and never ran."
+            if blocked else ""
+        )
         return {
             "model": best["model"],
             "reason": (
                 f"Fastest model that produced complete JSON and arithmetic that "
                 f"passed unaided ({best['seconds']}s, R:R {best['risk_reward']}:1). "
-                f"{len(passing)} of {len(rows)} candidates managed both."
+                f"{len(passing)} of {len(tried)} reachable candidates managed "
+                f"both.{blocked_note}"
             ),
             "passing": [r["model"] for r in passing],
         }
