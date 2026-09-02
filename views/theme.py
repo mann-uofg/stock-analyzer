@@ -128,6 +128,13 @@ def css(mode: str = "light") -> str:
     --warn-soft: {p["warn_soft"]};
     --track: {p["track"]};
 
+    /* Gauge zones. Muted on purpose: the track says which end of a scale is
+       good, while the marker on top of it stays the thing you actually read. */
+    --zone-good: color-mix(in srgb, {p["gain"]} 26%, transparent);
+    --zone-warn: color-mix(in srgb, {p["warn"]} 26%, transparent);
+    --zone-bad: color-mix(in srgb, {p["loss"]} 26%, transparent);
+    --zone-neutral: {p["track"]};
+
     /* Concentric radii: an inner corner is the outer minus its inset. */
     --r-xl: 26px; --r-lg: 20px; --r-md: 14px; --r-sm: 10px;
     --blur: 30px;
@@ -323,6 +330,51 @@ def css(mode: str = "light") -> str:
                   overflow: hidden; box-shadow: inset 0 1px 2px var(--glass-rim); }}
   .meter-fill {{ height: 100%; border-radius: 999px; transform-origin: left;
                  animation: grow .75s var(--ease) both .1s; }}
+
+  /* ---------- Gauges: a number shown on the scale it belongs to ----------- */
+
+  .gauge-grid {{ display: grid; gap: .7rem;
+                 grid-template-columns: repeat(auto-fit, minmax(255px, 1fr)); }}
+  .gauge {{ padding: .85rem .95rem 1rem; border-radius: var(--r-md);
+            background: var(--glass); border: 1px solid var(--glass-edge);
+            box-shadow: 0 1px 2px var(--shadow); }}
+  .gauge-head {{ display: flex; justify-content: space-between;
+                 align-items: baseline; gap: .6rem; margin-bottom: .5rem; }}
+  .gauge-label {{ font-size: .72rem; color: var(--faint); font-weight: 620;
+                  text-transform: uppercase; letter-spacing: .07em; }}
+  .gauge-value {{ font-size: 1.2rem; font-weight: 680; color: var(--text);
+                  white-space: nowrap; }}
+  .gauge-track {{ position: relative; height: 8px; border-radius: 999px;
+                  background: var(--track);
+                  box-shadow: inset 0 1px 2px var(--glass-rim); }}
+  /* The marker is a pin, not a fill: these scales have a meaningful middle,
+     so a bar growing from the left would imply more is always better. */
+  .gauge-marker {{ position: absolute; top: 50%; width: 13px; height: 13px;
+                   border-radius: 50%; background: var(--text);
+                   border: 2.5px solid var(--ground);
+                   transform: translate(-50%, -50%);
+                   box-shadow: 0 1px 4px var(--shadow);
+                   animation: pin .5s var(--spring) both .15s; }}
+  @keyframes pin {{ from {{ opacity: 0; transform: translate(-50%, -50%) scale(.3); }}
+                    to {{ opacity: 1; transform: translate(-50%, -50%) scale(1); }} }}
+  .gauge-ends {{ display: flex; justify-content: space-between;
+                 font-size: .62rem; color: var(--faint); margin-top: .3rem;
+                 font-variant-numeric: tabular-nums; }}
+  .gauge-verdict {{ font-size: .84rem; font-weight: 680; margin-top: .5rem; }}
+  .gauge-verdict.good {{ color: var(--gain); }}
+  .gauge-verdict.warn {{ color: var(--warn); }}
+  .gauge-verdict.bad {{ color: var(--loss); }}
+  .gauge-verdict.neutral {{ color: var(--dim); }}
+  .gauge-plain {{ font-size: .8rem; color: var(--dim); line-height: 1.45;
+                  margin-top: .2rem; }}
+  .gauge-note {{ font-size: .72rem; color: var(--faint); line-height: 1.4;
+                 margin-top: .4rem; padding-top: .4rem;
+                 border-top: 1px solid var(--glass-edge); }}
+
+  .plain-summary {{ font-size: .92rem; line-height: 1.55; color: var(--text);
+                    padding: .8rem 1rem; margin: .2rem 0 .9rem;
+                    border-radius: var(--r-md); background: var(--glass);
+                    border: 1px solid var(--glass-edge); }}
 
   /* ---------- Findings ---------------------------------------------------- */
 

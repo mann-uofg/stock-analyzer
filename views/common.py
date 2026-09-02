@@ -247,6 +247,69 @@ def meter(value: float | None, label: str, suffix: str = "/100") -> str:
     )
 
 
+_ZONE_FILL = {
+    "good": "var(--zone-good)", "warn": "var(--zone-warn)",
+    "bad": "var(--zone-bad)", "neutral": "var(--zone-neutral)",
+}
+
+
+def gauge(reading: Any, show_plain: bool = True) -> str:
+    """A metric shown with the scale it belongs on.
+
+    The number alone is only useful to someone who already knows the bands, so
+    the track is painted with them: green where the reading would be reassuring,
+    amber and red where it would not, and a marker at the value. The intent is
+    that the picture answers "is this good?" before the digits are even read.
+    """
+    if reading is None:
+        return ""
+
+    # Colour the whole scale first, then drop the marker on it.
+    stops = []
+    for start, end, tone in (reading.zones or []):
+        fill = _ZONE_FILL.get(tone, _ZONE_FILL["neutral"])
+        stops.append(f"{fill} {start * 100:.2f}%, {fill} {end * 100:.2f}%")
+    track_bg = (f"background:linear-gradient(90deg,{','.join(stops)})"
+                if stops else "")
+
+    marker = ""
+    if reading.position is not None:
+        marker = (f"<div class='gauge-marker' "
+                  f"style='left:{reading.position * 100:.2f}%'></div>")
+
+    lo, hi = reading.scale
+    ends = (
+        f"<div class='gauge-ends'><span>{lo:g}</span><span>{hi:g}</span></div>"
+        if reading.position is not None else ""
+    )
+    plain = (f"<div class='gauge-plain'>{_escape(reading.plain)}</div>"
+             if show_plain and reading.plain else "")
+    note = (f"<div class='gauge-note'>{_escape(reading.note)}</div>"
+            if reading.note else "")
+
+    return (
+        f"<div class='gauge'>"
+        f"<div class='gauge-head'>"
+        f"<span class='gauge-label'>{_escape(reading.label)}</span>"
+        f"<span class='gauge-value num'>{_escape(reading.display)}</span></div>"
+        f"<div class='gauge-track' style='{track_bg}'>{marker}</div>"
+        f"{ends}"
+        f"<div class='gauge-verdict {_escape(reading.tone)}'>"
+        f"{_escape(reading.verdict)}</div>"
+        f"{plain}{note}</div>"
+    )
+
+
+def gauge_grid(readings: list[Any], show_plain: bool = True) -> str:
+    cards = [gauge(r, show_plain) for r in readings if r is not None]
+    return f"<div class='gauge-grid'>{''.join(cards)}</div>"
+
+
+def plain_summary(text: str, tone: str = "neutral") -> str:
+    """The one-line, jargon-free reading that heads a panel."""
+    return (f"<div class='plain-summary {_escape(tone)}'>{_escape(text)}</div>")
+
+
 def split_sentence(text: str) -> tuple[str, str]:
     """Split off the first sentence, ignoring decimal points.
 

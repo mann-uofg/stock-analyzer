@@ -8,7 +8,16 @@ from typing import Any
 import pandas as pd
 import streamlit as st
 
-from analyzer import charts, horizon, llm, modelbench, patterns, sizing, store
+from analyzer import (
+    charts,
+    horizon,
+    interpret,
+    llm,
+    modelbench,
+    patterns,
+    sizing,
+    store,
+)
 from analyzer.datafeed import DataError
 
 from .common import (
@@ -18,9 +27,11 @@ from .common import (
     escape,
     finding,
     fmt,
+    gauge_grid,
     md_safe,
     meter,
     money,
+    plain_summary,
     prices,
     quote,
     html,
@@ -586,37 +597,83 @@ def _technicals_tab(payload: dict) -> None:
     mom, vol, vlm = (tech.get("momentum", {}), tech.get("volatility", {}),
                      tech.get("volume", {}))
 
-    cols = st.columns(4)
-    with cols[0]:
-        st.subheader("Trend")
-        st.metric("SMA 20", fmt(ma.get("sma_20")))
-        st.metric("SMA 50", fmt(ma.get("sma_50")))
-        st.metric("SMA 200", fmt(ma.get("sma_200")))
-        cross = ma.get("golden_death_cross", {}) or {}
-        st.caption(f"{ma.get('alignment') or '—'} · 50/200 {cross.get('state') or '—'}")
-    with cols[1]:
-        st.subheader("Momentum")
-        st.metric("RSI (14)", fmt(mom.get("rsi_14"), 1), mom.get("rsi_state"))
-        st.metric("MACD", fmt(mom.get("macd")),
-                  fmt(mom.get("macd_histogram"), 3, signed=True))
-        st.metric("Stochastic %K", fmt(mom.get("stoch_k"), 1))
-        st.metric("CCI (20)", fmt(mom.get("cci_20"), 1, signed=True))
-    with cols[2]:
-        st.subheader("Volatility")
-        st.metric("ATR (14)", fmt(vol.get("atr_14")),
-                  fmt(vol.get("atr_percent"), 2, "% of price"))
-        st.metric("ADX (14)", fmt(vol.get("adx_14"), 1), vol.get("adx_state"))
-        st.metric("Bollinger %B", fmt(vol.get("bb_percent_b"), 3))
-        st.metric("Bandwidth", fmt(vol.get("bb_bandwidth"), 2))
-    with cols[3]:
-        st.subheader("Volume")
-        st.metric("Last", big(vlm.get("last_volume")))
-        st.metric("20-day average", big(vlm.get("avg_volume_20d")))
-        st.metric("Ratio", fmt(vlm.get("volume_ratio"), 2, "x"),
-                  "spike" if vlm.get("volume_spike") else None)
-        st.metric("VWAP (14)", fmt(vlm.get("vwap_14")), vlm.get("price_vs_vwap"))
+    readings = interpret.read_many([
+        ("rsi_14", mom.get("rsi_14")),
+        ("stoch_k", mom.get("stoch_k")),
+        ("cci_20", mom.get("cci_20")),
+        ("adx_14", vol.get("adx_14")),
+        ("bb_percent_b", vol.get("bb_percent_b")),
+        ("atr_percent", vol.get("atr_percent")),
+        ("volume_ratio", vlm.get("volume_ratio")),
+    ])
+    html(plain_summary(interpret.summarise(readings, "the chart")))
+
+    # Concerns first: someone scanning this page should meet the awkward
+    # readings before the reassuring ones, not have to hunt for them.
+    flagged = interpret.concerns(readings)
+    if flagged:
+        st.caption("Worth a closer look")
+        html(gauge_grid(flagged))
+        rest = [r for r in readings if r not in flagged]
+        if rest:
+            st.caption("Reading normally")
+            html(gauge_grid(rest))
+    else:
+        html(gauge_grid(readings))
+
+    with st.expander("The underlying numbers"):
+        cols = st.columns(4)
+        with cols[0]:
+            st.markdown("**Trend**")
+            st.metric("SMA 20", fmt(ma.get("sma_20")))
+            st.metric("SMA 50", fmt(ma.get("sma_50")))
+            st.metric("SMA 200", fmt(ma.get("sma_200")))
+            cross = ma.get("golden_death_cross", {}) or {}
+            st.caption(
+                f"{ma.get('alignment') or '—'} · 50/200 {cross.get('state') or '—'}"
+            )
+        with cols[1]:
+            st.markdown("**Momentum**")
+            st.metric("RSI (14)", fmt(mom.get("rsi_14"), 1), mom.get("rsi_state"))
+            st.metric("MACD", fmt(mom.get("macd")),
+                      fmt(mom.get("macd_histogram"), 3, signed=True))
+            st.metric("Stochastic %K", fmt(mom.get("stoch_k"), 1))
+            st.metric("CCI (20)", fmt(mom.get("cci_20"), 1, signed=True))
+        with cols[2]:
+            st.markdown("**Volatility**")
+            st.metric("ATR (14)", fmt(vol.get("atr_14")),
+                      fmt(vol.get("atr_percent"), 2, "% of price"))
+            st.metric("ADX (14)", fmt(vol.get("adx_14"), 1), vol.get("adx_state"))
+            st.metric("Bollinger %B", fmt(vol.get("bb_percent_b"), 3))
+            st.metric("Bandwidth", fmt(vol.get("bb_bandwidth"), 2))
+        with cols[3]:
+            st.markdown("**Volume**")
+            st.metric("Last", big(vlm.get("last_volume")))
+            st.metric("20-day average", big(vlm.get("avg_volume_20d")))
+            st.metric("Ratio", fmt(vlm.get("volume_ratio"), 2, "x"),
+                      "spike" if vlm.get("volume_spike") else None)
+            st.metric("VWAP (14)", fmt(vlm.get("vwap_14")),
+                      vlm.get("price_vs_vwap"))
 
     st.subheader("Market sensitivity")
+
+    # Lead with the estimator Yahoo and Google publish, so the headline figure
+    # is the one a reader can cross-check anywhere else.
+    benchmarks = risk_panel.get("benchmarks") or {}
+    headline = None
+    for bench in ("SPY", "QQQ"):
+        window = (benchmarks.get(bench) or {}).get("5y_monthly")
+        if window and window.get("beta") is not None:
+            headline = (bench, window)
+            break
+    if headline:
+        bench_name, window = headline
+        st.caption(f"Against {bench_name}, measured over five years of monthly moves")
+        html(gauge_grid(interpret.read_many([
+            ("beta", window.get("beta")),
+            ("r_squared", window.get("r_squared")),
+        ])))
+
     rows = []
     for bench, windows in (risk_panel.get("benchmarks") or {}).items():
         for label, vals in windows.items():
@@ -649,13 +706,23 @@ def _technicals_tab(payload: dict) -> None:
         )
 
     ratios, rvol = risk_panel.get("ratios", {}), risk_panel.get("volatility", {})
-    cols = st.columns(6)
-    cols[0].metric("HV 30d", fmt(rvol.get("hv_30d_annual_pct"), 1, "%"))
-    cols[1].metric("HV percentile", fmt(rvol.get("hv_percentile_1y"), 0, "%"))
-    cols[2].metric("Annual return", fmt(ratios.get("annual_return_pct"), 1, "%", signed=True))
-    cols[3].metric("Sharpe", fmt(ratios.get("sharpe"), 2))
-    cols[4].metric("Sortino", fmt(ratios.get("sortino"), 2))
-    cols[5].metric("Max drawdown", fmt(risk_panel.get("max_drawdown_1y_pct"), 1, "%"))
+
+    st.subheader("Reward for the risk")
+    html(gauge_grid(interpret.read_many([
+        ("sharpe", ratios.get("sharpe")),
+        ("sortino", ratios.get("sortino")),
+        ("max_drawdown_1y_pct", risk_panel.get("max_drawdown_1y_pct")),
+        ("hv_percentile_1y", rvol.get("hv_percentile_1y")),
+    ])))
+
+    cols = st.columns(2)
+    cols[0].metric("Annualised volatility (30d)",
+                   fmt(rvol.get("hv_30d_annual_pct"), 1, "%"),
+                   help="How much it swings over a year, projected from the "
+                        "last 30 days.")
+    cols[1].metric("Annual return",
+                   fmt(ratios.get("annual_return_pct"), 1, "%", signed=True),
+                   help="Compound annual return over the analysed window.")
 
 
 def _options_tab(opts: dict) -> None:
@@ -665,13 +732,24 @@ def _options_tab(opts: dict) -> None:
 
     ivc, pcr = opts.get("iv_context", {}), opts.get("put_call_ratio", {})
     gamma = opts.get("gamma_exposure", {})
-    cols = st.columns(5)
+    readings = interpret.read_many([
+        ("iv_hv_ratio", ivc.get("iv_hv_ratio")),
+        ("put_call_ratio", pcr.get("open_interest")),
+    ])
+    if readings:
+        html(plain_summary(interpret.summarise(readings, "the options market")))
+        html(gauge_grid(readings))
+
+    cols = st.columns(4)
     cols[0].metric("Expiry", opts["expiry"], f"{opts['days_to_expiry']} days")
-    cols[1].metric("ATM IV", fmt(opts.get("atm_iv_pct"), 1, "%"))
-    cols[2].metric("HV 30d", fmt(ivc.get("hv_30d_pct"), 1, "%"),
-                   f"IV/HV {fmt(ivc.get('iv_hv_ratio'), 2)}")
-    cols[3].metric("P/C volume", fmt(pcr.get("volume"), 3))
-    cols[4].metric("P/C open interest", fmt(pcr.get("open_interest"), 3))
+    cols[1].metric("Expected swing (implied)", fmt(opts.get("atm_iv_pct"), 1, "%"),
+                   help="The annual movement options traders are pricing in.")
+    cols[2].metric("Actual swing (last 30d)", fmt(ivc.get("hv_30d_pct"), 1, "%"),
+                   help="What the stock has really been doing, on the same "
+                        "annualised scale — the comparison the gauge above makes.")
+    cols[3].metric("P/C by volume", fmt(pcr.get("volume"), 2),
+                   help="Today's put versus call trading. Noisier than the "
+                        "open-interest version gauged above.")
 
     for note in (opts.get("data_quality") or {}).get("notes") or []:
         st.caption(note)
@@ -703,10 +781,23 @@ def _options_tab(opts: dict) -> None:
             column_config={
                 "iv_pct": st.column_config.NumberColumn("IV %", format="%.1f"),
                 "iv_source": st.column_config.TextColumn("IV from"),
-                "delta": st.column_config.NumberColumn(format="%.3f"),
-                "gamma": st.column_config.NumberColumn(format="%.5f"),
-                "theta": st.column_config.NumberColumn(format="%.3f"),
-                "vega": st.column_config.NumberColumn(format="%.3f"),
+                "delta": st.column_config.NumberColumn(
+                    format="%.3f",
+                    help="How much the option moves per $1 move in the stock. "
+                         "0.50 means it gains about 50c. Also a rough shorthand "
+                         "for the chance it expires in the money."),
+                "gamma": st.column_config.NumberColumn(
+                    format="%.5f",
+                    help="How fast delta itself changes. High gamma means the "
+                         "option's behaviour shifts quickly as the stock moves."),
+                "theta": st.column_config.NumberColumn(
+                    format="%.3f",
+                    help="What the option loses each day simply from time "
+                         "passing. Always working against a buyer."),
+                "vega": st.column_config.NumberColumn(
+                    format="%.3f",
+                    help="How much the option moves per 1 point change in "
+                         "implied volatility — the fear premium."),
             },
         )
         st.caption("`solved` means implied volatility was recovered from the traded "
@@ -718,16 +809,34 @@ def _fundamentals_tab(fund: dict) -> None:
     val, earn = fund.get("valuation", {}), fund.get("earnings", {})
     cons = fund.get("consensus", {})
 
-    cols = st.columns(4)
-    cols[0].metric("Trailing P/E", fmt(val.get("trailing_pe"), 1))
-    cols[1].metric("Forward P/E", fmt(val.get("forward_pe"), 1))
-    cols[2].metric("PEG", fmt(val.get("peg_ratio"), 2))
-    cols[3].metric("Price / sales", fmt(val.get("price_to_sales"), 1))
-    cols = st.columns(4)
-    cols[0].metric("EV / EBITDA", fmt(val.get("ev_to_ebitda"), 1))
-    cols[1].metric("FCF yield", fmt(val.get("fcf_yield_pct"), 2, "%"))
-    cols[2].metric("Revenue YoY", fmt(val.get("revenue_yoy_growth_pct"), 1, "%", signed=True))
-    cols[3].metric("Profit margin", fmt(val.get("profit_margin_pct"), 1, "%"))
+    readings = interpret.read_many([
+        ("forward_pe", val.get("forward_pe")),
+        ("trailing_pe", val.get("trailing_pe")),
+        ("peg", val.get("peg_ratio")),
+        ("ev_ebitda", val.get("ev_to_ebitda")),
+        ("fcf_yield_pct", val.get("fcf_yield_pct")),
+        ("days_to_earnings", earn.get("days_to_earnings")),
+    ])
+    html(plain_summary(interpret.summarise(readings, "the valuation")))
+    html(gauge_grid(readings))
+
+    st.caption(
+        "Valuation bands are conventions, not verdicts — a fast-growing "
+        "software company trades where a utility would look absurd. Compare "
+        "these with companies in the same industry before drawing a conclusion."
+    )
+
+    with st.expander("Other fundamentals"):
+        cols = st.columns(3)
+        cols[0].metric("Price / sales", fmt(val.get("price_to_sales"), 1),
+                       help="Market value against annual revenue. Useful when a "
+                            "company has no profits yet.")
+        cols[1].metric("Revenue YoY",
+                       fmt(val.get("revenue_yoy_growth_pct"), 1, "%", signed=True),
+                       help="Sales growth against the same quarter last year.")
+        cols[2].metric("Profit margin", fmt(val.get("profit_margin_pct"), 1, "%"),
+                       help="Profit per pound of sales. Higher usually means "
+                            "more pricing power.")
 
     left, right = st.columns([3, 2])
     with left:
