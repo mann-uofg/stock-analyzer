@@ -257,9 +257,18 @@ def render() -> None:
         st.error(f"Unexpected failure: {exc.__class__.__name__}: {exc}")
         return
 
+    # Say where the write-up is actually coming from. Claiming "locally" while
+    # the payload goes to ollama.com would misrepresent the one thing a reader
+    # might care most about, and the timing differs by an order of magnitude.
+    provider = llm.provider()
+    spinner_text = {
+        "cloud": "Writing the analysis in the cloud… usually under a minute.",
+        "local": "Writing the analysis on this machine… one to three minutes.",
+    }.get(provider, "Writing the analysis…")
+
     narrative = None
     if controls["use_llm"] and st.session_state.get("llm_for") == symbol:
-        with st.spinner("Writing the analysis locally… one to three minutes."):
+        with st.spinner(spinner_text):
             narrative = synthesise(
                 payload, controls["authority"],
                 f"{symbol}:{controls['period']}:{controls['authority']}",
@@ -271,7 +280,8 @@ def render() -> None:
             "verdict": narrative.get("verdict"),
             "conviction_pct": narrative.get("conviction_pct"),
             "trade_setup": narrative.get("trade_setup", {}),
-            "author": "local model",
+            "author": {"cloud": "cloud model", "local": "local model"}.get(
+                provider, "model"),
         }
     else:
         call = {

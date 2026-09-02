@@ -23,7 +23,7 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-from analyzer import charts, store  # noqa: E402
+from analyzer import charts, llm, store  # noqa: E402
 from views.theme import css  # noqa: E402
 
 # Appearance is stored, not just held in session, so the app opens in the mode
@@ -91,10 +91,20 @@ with st.sidebar:
         store.save_settings({**store.load_settings(), "appearance": chosen})
         st.rerun()
 
+    # Where the data goes depends on which model is answering, so the footer
+    # reads the live provider rather than asserting a privacy guarantee that
+    # stopped being true the moment this moved to a cloud model.
+    where = {
+        "cloud": "Market data from Yahoo Finance. Written analysis is generated "
+                 "by a cloud model, which receives the figures for the ticker "
+                 "you analyse.",
+        "local": "Market data from Yahoo Finance. Nothing else leaves this "
+                 "machine.",
+    }.get(llm.provider(), "Market data from Yahoo Finance.")
+
     st.markdown(
         "<div class='muted' style='margin-top:1.4rem;border-top:1px solid "
         "var(--glass-edge);padding-top:.9rem'>Analytical output only — not "
-        "investment advice.<br>Market data from Yahoo Finance. Nothing else "
-        "leaves this machine.</div>",
+        f"investment advice.<br>{where}</div>",
         unsafe_allow_html=True,
     )
