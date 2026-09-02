@@ -1,0 +1,45 @@
+# Stock Analyzer - pinned dependencies
+#
+# Verified working together on Python 3.13 / macOS (Apple Silicon).
+# Install:  uv pip install -r requirements.txt
+#     or:  pip install -r requirements.txt
+
+# --- Market data ---
+yfinance==1.5.2
+lxml==6.1.1              # required by yfinance's earnings-date scraper
+
+# --- Numerics ---
+pandas==3.0.5
+numpy==2.5.2
+scipy==1.18.0            # Black-Scholes CDF/PDF and the Brent IV solver
+
+# --- Technical indicators ---
+# `ta` is used in preference to `pandas-ta`: pandas-ta pins numpy<2.3 and
+# silently downgrades the environment, while `ta` is pure pandas/numpy with no
+# transitive pins and works on numpy 2.5 / pandas 3.0.
+ta==0.11.0
+
+# --- CLI / presentation ---
+typer==0.27.1
+rich==15.0.0
+
+# --- Web dashboard (streamlit run app.py) ---
+# Telemetry is disabled and the server binds to loopback; see
+# .streamlit/config.toml.
+streamlit==1.61.1
+plotly==6.9.0
+
+# --- Local LLM + config ---
+requests==2.34.2         # talks to Ollama on localhost only
+python-dotenv==1.2.2
+
+# --- Testing ---
+pytest==9.1.1
+# Optional: cross-validates the Black-Scholes implementation. The suite skips
+# that one test when it is absent.
+# py_vollib==1.0.12
+
+# --- Static checking ---
+# Catches undefined names in the Streamlit views, which the test suite does
+# not import and py_compile cannot see.
+pyflakes==3.4.0

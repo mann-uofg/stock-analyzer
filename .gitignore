@@ -1,0 +1,23 @@
+# ---------------------------------------------------------------------------
+# Your data. None of this belongs in a repository, least of all a public one:
+# portfolio.json holds real positions and sizes.
+# ---------------------------------------------------------------------------
+data/
+.cache/
+*.pkl
+
+# Secrets. The Ollama key is a credential; .streamlit/secrets.toml is where
+# Streamlit keeps them locally and must never be committed.
+.env
+.streamlit/secrets.toml
+
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Scratch
+design/
+*.log
+.DS_Store

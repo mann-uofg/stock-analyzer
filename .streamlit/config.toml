@@ -1,0 +1,25 @@
+# Streamlit collects anonymous usage statistics by default. This tool is
+# offline-first, so telemetry is switched off and the server binds to the
+# loopback interface only - nothing about your research leaves this machine.
+[browser]
+gatherUsageStats = false
+serverAddress = "localhost"
+
+[server]
+# Serves ./static at /app/static so the bundled font loads from this machine
+# rather than from a font CDN - no external request, and it works offline.
+enableStaticServing = true
+address = "127.0.0.1"
+headless = true
+fileWatcherType = "auto"
+
+# The app paints its own Liquid Glass surfaces over an ambient ground and
+# switches light/dark at runtime, so the base theme is kept transparent and
+# neutral here. Colours live in views/theme.py.
+[theme]
+base = "light"
+primaryColor = "#0a6cff"
+backgroundColor = "#eef1f8"
+secondaryBackgroundColor = "#ffffff"
+textColor = "#171a21"
+font = "sans serif"
