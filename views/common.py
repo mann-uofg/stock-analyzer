@@ -17,7 +17,7 @@ import streamlit as st
 
 warnings.filterwarnings("ignore")
 
-from analyzer import datafeed, engine, horizon, llm, risk  # noqa: E402
+from analyzer import datafeed, engine, horizon, llm, risk, store  # noqa: E402
 from analyzer.config import BENCHMARKS  # noqa: E402
 from analyzer.datafeed import DataError  # noqa: E402
 
@@ -421,7 +421,10 @@ def screen(symbols: tuple[str, ...], period: str = "2y") -> list[dict[str, Any]]
 
     # Modest pool: Yahoo rate-limits aggressively, and past about a dozen
     # concurrent requests the failures cost more than the parallelism saves.
-    workers = max(1, min(8, len(symbols)))
+    # A shared host gets fewer still - Community Cloud allows about a gigabyte,
+    # and eight threads each holding several years of OHLCV will exhaust it.
+    ceiling = 4 if store.is_shared_host() else 8
+    workers = max(1, min(ceiling, len(symbols)))
     results: dict[str, dict[str, Any]] = {}
     with ThreadPoolExecutor(max_workers=workers) as pool:
         futures = {

@@ -1,19 +1,76 @@
 # Stock Analyzer
 
-A zero-cost, fully local equity research terminal — as a clickable web
-dashboard or a terminal command. Technicals, risk metrics, option Greeks,
-fundamentals, a scored verdict, and a risk-managed trade plan written up by a
-local LLM.
+A zero-cost equity research terminal — as a hosted web app, a local dashboard,
+or a terminal command. Technicals, risk metrics, option Greeks, fundamentals,
+chart patterns, ranked news, a scored verdict, and a risk-managed trade plan
+written up by an LLM.
+
+---
+
+## Hosting it for free
+
+**1. Get an Ollama Cloud key** (free, no card). Sign in at
+[ollama.com](https://ollama.com) → *Settings* → *API keys* → create one.
+
+**2. Deploy** at [share.streamlit.io](https://share.streamlit.io):
+
+- *Create app* → *Deploy a public app from GitHub*
+- Repository `mann-uofg/stock-analyzer`, branch `main`, file `app.py`
+- Open **Advanced settings → Secrets** before deploying and paste:
+
+```toml
+OLLAMA_API_KEY = "your-key-here"
+OLLAMA_CLOUD_MODEL = "gpt-oss:120b"
+STOCK_ANALYZER_SHARED = "1"
+```
+
+That last line is not optional. It switches storage from disk to the browser
+session, so holdings are never written to a server other people can reach.
+
+Community Cloud's free tier gives **one private app**, unlimited public ones,
+about **1 GB of memory**, and sleeps an app after 12 hours idle — it wakes on
+the next visit. There are no custom domains; the URL will look like
+`stock-analyzer-<something>.streamlit.app`.
+
+### What this costs you in privacy
+
+With a cloud key set, the analysis payload — tickers, positions, prices — is
+sent to ollama.com for the write-up. Market data already comes from Yahoo
+either way. Leave the key unset and the app falls back to a local model, in
+which case nothing leaves the machine but your laptop does the work.
+
+On a shared host your watchlist and holdings live **in the browser session
+only**. Use *Save / restore your data* in the sidebar to download them as a
+small JSON file and load it back next visit; nothing is stored server-side.
+
+## Running it locally
 
 ```bash
-streamlit run app.py          # clickable dashboard at localhost:8501
+streamlit run app.py          # dashboard at localhost:8501
 ```
 ```bash
 python main.py --ticker NVDA  # terminal dashboard
 ```
 
-**No API keys. No subscriptions. No paid tiers.** The analysis payload never
-leaves your machine.
+**No subscriptions, no paid tiers.** A cloud key is optional; without one the
+app uses a local model, and without that it still produces a complete
+deterministic report.
+
+### Which model runs the write-up
+
+| | Speed | Cost to your machine | Quality |
+|---|---|---|---|
+| **Ollama Cloud** (`OLLAMA_API_KEY` set) | seconds | none | frontier-scale |
+| **Local Ollama** (no key, daemon running) | 1–3 minutes | pins the GPU, runs hot | 9B-class |
+| **Deterministic** (neither) | instant | none | no prose, full numbers |
+
+The local path is what made a laptop run hot: a 9B model holds ~6 GB on the
+GPU and computes for minutes per note. If you have a cloud key set and want
+that memory back:
+
+```bash
+brew services stop ollama
+```
 
 ---
 
