@@ -53,11 +53,13 @@ class Settings:
     ollama_cloud_host: str = field(
         default_factory=lambda: os.getenv("OLLAMA_CLOUD_HOST", "https://ollama.com").strip()
     )
-    # 120B against the 9B that was running locally. Comfortably overkill for
-    # this workload, which is the point: the arithmetic and the hedging in a
-    # research note are where small models fail.
+    # A current-generation model, not the largest available. The free tier
+    # meters GPU time, so a frontier 1T model would drain the quota in a
+    # handful of notes; this workload needs reliable JSON and correct
+    # arithmetic rather than maximum capability. Run
+    # scripts/compare_models.py to pick empirically for your own usage.
     ollama_cloud_model: str = field(
-        default_factory=lambda: os.getenv("OLLAMA_CLOUD_MODEL", "gpt-oss:120b").strip()
+        default_factory=lambda: os.getenv("OLLAMA_CLOUD_MODEL", "glm-5.3").strip()
     )
     ollama_host: str = field(
         default_factory=lambda: os.getenv("OLLAMA_HOST", "http://localhost:11434").strip()

@@ -20,7 +20,7 @@ written up by an LLM.
 
 ```toml
 OLLAMA_API_KEY = "your-key-here"
-OLLAMA_CLOUD_MODEL = "gpt-oss:120b"
+OLLAMA_CLOUD_MODEL = "glm-5.3"
 STOCK_ANALYZER_SHARED = "1"
 ```
 
@@ -55,6 +55,34 @@ python main.py --ticker NVDA  # terminal dashboard
 **No subscriptions, no paid tiers.** A cloud key is optional; without one the
 app uses a local model, and without that it still produces a complete
 deterministic report.
+
+### Picking the cloud model
+
+Ollama Cloud serves a few dozen models and the list moves quickly. Which is
+best *here* is not a general-intelligence question — this job needs valid JSON
+across nineteen fields and arithmetic that satisfies a 2:1 reward-to-risk
+floor, which is exactly where smaller models fail. And because the free tier
+meters **GPU time**, the largest model is not automatically the right one for
+something you run many times a day.
+
+So measure it rather than guessing:
+
+```bash
+python scripts/compare_models.py --ticker NVDA
+```
+
+It sends each candidate the same prompt the app sends, on a real payload from
+your own data, and runs the answer through the same validator that guards the
+live trade plan — reporting valid JSON, field completeness, whether the
+arithmetic passed unaided, and latency. Then set the winner:
+
+```bash
+OLLAMA_CLOUD_MODEL=<whatever won>
+```
+
+Current candidates worth trying, heaviest first: `deepseek-v4-pro:0813`,
+`kimi-k3`, `mistral-large-3:675b` · `glm-5.3`, `qwen3.5:397b`,
+`nemotron-3-super` · `glm-5.3-flash`, `deepseek-v4-flash:0731`.
 
 ### Which model runs the write-up
 
