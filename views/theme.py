@@ -333,11 +333,14 @@ def css(mode: str = "light") -> str:
 
   /* The storage bridge is a zero-height iframe that only moves data between
      Python and localStorage. Streamlit still reserves layout space for the
-     block that wraps it, which would otherwise show as a gap at the top. */
-  iframe[title="stock_analyzer_localstore"] {{ display: none !important; }}
-  div:has(> iframe[title="stock_analyzer_localstore"]) {{
-    display: none !important;
-  }}
+     block wrapping it, which showed as a ~26px gap above the page heading.
+     Matched on the tail of the title: Streamlit prefixes the declared name
+     with the module path, so this renders as
+     "analyzer.browserstore.stock_analyzer_localstore". */
+  iframe[title$="stock_analyzer_localstore"] {{ display: none !important; }}
+  div[data-testid="stElementContainer"]:has(
+    > iframe[title$="stock_analyzer_localstore"]
+  ) {{ display: none !important; }}
 
   /* ---------- Gauges: a number shown on the scale it belongs to ----------- */
 
