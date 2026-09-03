@@ -5,13 +5,23 @@ Two backends, chosen automatically:
 * **Local** - plain JSON under ``data/``, written atomically. No database, no
   account: the file sits next to the code and is trivially inspectable or
   deletable.
-* **Shared host** - the browser session instead of disk.
+* **Shared host** - the visitor's own browser, cached in the session.
 
 That second mode is not a nicety. On a deployed instance the filesystem is
 shared by every visitor, so writing holdings to ``data/portfolio.json`` would
 publish one person's positions to everyone who opened the URL, and an ephemeral
-container would lose them on the next restart regardless. When the app detects
-it is running on a host rather than a laptop, state is kept per session.
+container would lose them on the next restart regardless.
+
+Session state alone solved the leak but not the loss: it evaporates the moment
+the tab closes, so every visit started blank. State is therefore mirrored into
+the browser's own storage, which survives closing the tab, the app sleeping and
+redeploys, while still never reaching the server's disk. There is no account
+and no password, because there is nothing on a server to protect - the data
+never leaves the machine it was entered on.
+
+The cost of that choice is honest and worth stating: it is per-browser. Another
+device starts empty, and clearing site data clears this too, which is what the
+JSON export is for.
 
 Every read tolerates a missing or corrupt file by returning the empty default,
 so a bad write can never brick the app.
@@ -26,6 +36,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from . import browserstore
 from .config import ROOT
 
 
@@ -105,6 +116,10 @@ def _write(path: Path, data: Any) -> None:
         if session is not None:
             session[f"_store_{path.stem}"] = data
             session[f"_store_{path.stem}_updated"] = _now()
+            # The browser is written on the next script run rather than here:
+            # a component can only mount at one point in the layout, and every
+            # mutation in this app is followed by a rerun.
+            session[_DIRTY] = True
         return
 
     payload = {"schema": SCHEMA_VERSION, "updated": _now(), "data": data}
@@ -116,6 +131,88 @@ def _write(path: Path, data: Any) -> None:
     except Exception:
         Path(tmp).unlink(missing_ok=True)
         raise
+
+
+STATE_KEYS = ("watchlist", "portfolio", "settings")
+_DIRTY = "_localstore_dirty"
+_HYDRATED = "_localstore_hydrated"
+
+
+def _current_blob() -> str:
+    """Everything this session holds, as one string for the browser."""
+    session = _session_state()
+    data = {key: (session.get(f"_store_{key}") if session else None)
+            for key in STATE_KEYS}
+    return json.dumps({"schema": SCHEMA_VERSION, "updated": _now(), "data": data})
+
+
+def _apply_blob(raw: str) -> None:
+    """Load a stored blob into the session, ignoring anything malformed."""
+    session = _session_state()
+    if session is None:
+        return
+    try:
+        payload = json.loads(raw)
+    except (json.JSONDecodeError, TypeError):
+        return
+    if not isinstance(payload, dict):
+        return
+    stored = payload.get("data")
+    if not isinstance(stored, dict):
+        return
+    for key in STATE_KEYS:
+        value = stored.get(key)
+        if value is not None:
+            session[f"_store_{key}"] = value
+
+
+def sync_browser() -> None:
+    """Mirror this session against the browser's own storage.
+
+    Called once per script run, before anything reads state. The first run
+    only mounts the frame - the browser's answer arrives on the run after, so
+    hydration deliberately waits for an explicit ``ready`` rather than treating
+    silence as "nothing saved", which would blank real holdings on first paint.
+    """
+    if not is_shared_host():
+        return
+    session = _session_state()
+    if session is None:
+        return
+
+    hydrated = bool(session.get(_HYDRATED))
+    # Only push once there is something of this session's own to push; writing
+    # before hydration would overwrite saved data with an empty session.
+    write = _current_blob() if (hydrated and session.get(_DIRTY)) else None
+
+    reply = browserstore.sync(write=write)
+
+    if write is not None:
+        session[_DIRTY] = False
+
+    if not hydrated and isinstance(reply, dict) and reply.get("ready"):
+        raw = reply.get("data")
+        if isinstance(raw, str) and raw:
+            _apply_blob(raw)
+        session[_HYDRATED] = True
+
+
+def forget_browser() -> None:
+    """Erase this browser's saved copy and the session with it."""
+    session = _session_state()
+    if session is None:
+        return
+    browserstore.sync(clear=True)
+    for key in STATE_KEYS:
+        session.pop(f"_store_{key}", None)
+        session.pop(f"_store_{key}_updated", None)
+    session[_DIRTY] = False
+
+
+def saved_in_browser() -> bool:
+    """Whether this session has been restored from, or saved to, the browser."""
+    session = _session_state()
+    return bool(session and session.get(_HYDRATED))
 
 
 def export_state() -> dict[str, Any]:

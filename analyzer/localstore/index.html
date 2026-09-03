@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<!--
+  Reads and writes this browser's saved state on behalf of Python.
+
+  Streamlit runs on the server and cannot see localStorage, so recovering saved
+  holdings needs a round trip: this frame reads the value and posts it back as
+  a component value, which reaches Python on the following script run.
+
+  Written by hand rather than pulled from a package. The obvious dependency
+  spins on `time.sleep` inside Streamlit's main thread while waiting for this
+  value, which on a single-worker free tier stalls the whole app. The component
+  protocol is four postMessage calls, so there is nothing here worth a hang.
+
+  The reply is always an object, never a bare string. Python has to be able to
+  tell "this browser has nothing saved" from "the frame has not answered yet",
+  and both would otherwise arrive as null - at which point an empty first paint
+  would overwrite real holdings with nothing.
+-->
+<meta charset="utf-8" />
+<script>
+  const KEY = "stock-analyzer-state-v1";
+
+  function post(type, extra) {
+    window.parent.postMessage(
+      Object.assign({ isStreamlitMessage: true, type: type }, extra || {}), "*"
+    );
+  }
+
+  function readStored() {
+    // Storage throws outright in some privacy modes rather than returning
+    // null, so a failed read must look exactly like nothing being saved.
+    try {
+      return window.localStorage.getItem(KEY);
+    } catch (err) {
+      return null;
+    }
+  }
+
+  let lastSent = undefined;
+
+  function onRender(event) {
+    const data = event.data;
+    if (!data || data.type !== "streamlit:render") return;
+    const args = data.args || {};
+
+    if (typeof args.write === "string") {
+      try {
+        window.localStorage.setItem(KEY, args.write);
+      } catch (err) {
+        /* Quota or blocked storage: the app still runs, it just cannot save. */
+      }
+    }
+    if (args.clear === true) {
+      try {
+        window.localStorage.removeItem(KEY);
+      } catch (err) {}
+    }
+
+    const current = readStored();
+    // Re-sending an identical value would set the component value again, and
+    // every set costs another script run - that is how these bridges loop.
+    if (current !== lastSent) {
+      lastSent = current;
+      post("streamlit:setComponentValue", {
+        value: { ready: true, data: current },
+        dataType: "json",
+      });
+    }
+  }
+
+  window.addEventListener("message", onRender);
+  post("streamlit:componentReady", { apiVersion: 1 });
+  post("streamlit:setFrameHeight", { height: 0 });
+</script>

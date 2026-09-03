@@ -331,6 +331,14 @@ def css(mode: str = "light") -> str:
   .meter-fill {{ height: 100%; border-radius: 999px; transform-origin: left;
                  animation: grow .75s var(--ease) both .1s; }}
 
+  /* The storage bridge is a zero-height iframe that only moves data between
+     Python and localStorage. Streamlit still reserves layout space for the
+     block that wraps it, which would otherwise show as a gap at the top. */
+  iframe[title="stock_analyzer_localstore"] {{ display: none !important; }}
+  div:has(> iframe[title="stock_analyzer_localstore"]) {{
+    display: none !important;
+  }}
+
   /* ---------- Gauges: a number shown on the scale it belongs to ----------- */
 
   .gauge-grid {{ display: grid; gap: .7rem;

@@ -26,6 +26,11 @@ st.set_page_config(
 from analyzer import charts, llm, store  # noqa: E402
 from views.theme import css  # noqa: E402
 
+# Restore this browser's saved state before anything reads it. On a shared
+# host the session starts empty on every visit, so without this the first read
+# below would see nothing and the app would open blank each time.
+store.sync_browser()
+
 # Appearance is stored, not just held in session, so the app opens in the mode
 # you left it in.
 _settings = store.load_settings()
@@ -55,14 +60,16 @@ navigation = st.navigation(
 navigation.run()
 
 with st.sidebar:
-    # On a shared host the session is the only store, so the user needs a way
-    # to carry their watchlist and holdings between visits.
+    # Holdings live in this browser. The export exists for the two cases that
+    # storage cannot cover: moving to another device, and clearing site data.
     if store.is_shared_host():
-        with st.expander("Save / restore your data"):
+        with st.expander("Your data"):
             st.caption(
-                "This is a shared server, so your holdings live in this browser "
-                "session only — nothing about your portfolio is written to it. "
-                "Download to keep them, upload to restore."
+                "Your holdings, watchlist and settings save automatically in "
+                "this browser and are restored when you come back — no account, "
+                "and nothing about your portfolio is stored on the server. "
+                "Because it is tied to this browser, download a copy to move to "
+                "another device or before clearing site data."
             )
             st.download_button(
                 "Download my data",
@@ -79,6 +86,16 @@ with st.sidebar:
                     st.success("Restored " + ", ".join(loaded))
                 except Exception as exc:  # noqa: BLE001
                     st.error(f"Could not read that file: {exc}")
+
+            # Erasing is irreversible and there is no server-side copy to
+            # recover from, so it takes a deliberate second action.
+            st.divider()
+            confirm = st.checkbox("I want to erase my saved data")
+            if st.button("Forget this browser", width="stretch",
+                         disabled=not confirm):
+                store.forget_browser()
+                st.success("Erased. Nothing of yours is left in this browser.")
+                st.rerun()
 
     st.markdown("<div style='margin-top:1.6rem'></div>", unsafe_allow_html=True)
     modes = {"light": "Light", "dark": "Dark"}
