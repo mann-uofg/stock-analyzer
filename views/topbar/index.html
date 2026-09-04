@@ -54,26 +54,51 @@
 
     // The header lays out as one space-between row: a spacer, the navigation,
     // and the action cluster holding Fork and the menu. Settings belongs at
-    // the front of that cluster.
+    // the front of that cluster, which is the row's last child whether or not
+    // the navigation has rendered yet.
     function actionCluster() {
       var head = header();
       if (!head) return null;
       var divs = head.getElementsByTagName("div");
       for (var i = 0; i < divs.length; i++) {
         var style = win.getComputedStyle(divs[i]);
-        if (style.justifyContent === "space-between" && divs[i].children.length >= 3) {
+        if (style.justifyContent === "space-between" && divs[i].children.length >= 2) {
           return divs[i].lastElementChild;
         }
       }
       return null;
     }
 
+    var placed = false;
+
     function placeSettings() {
       var bar = doc.querySelector(".st-key-settings_bar");
       var host = actionCluster();
-      if (!bar || !host || bar.parentElement === host) return;
-      host.insertBefore(bar, host.firstChild);
+      if (!bar || !host) return false;
+      if (bar.parentElement !== host) {
+        host.insertBefore(bar, host.firstChild);
+      }
       bar.setAttribute("data-in-topbar", "1");
+      placed = true;
+      return true;
+    }
+
+    // The control is hidden until it lands in the header, so a placement that
+    // never succeeds would make Settings unreachable rather than merely
+    // misplaced. If the header has not appeared after a few seconds, show it
+    // where it was declared instead - an ugly row beats a lost control.
+    function placeOrFallBack() {
+      if (placeSettings()) return;
+      var tries = 0;
+      var timer = win.setInterval(function () {
+        if (placeSettings() || ++tries > 60) {
+          win.clearInterval(timer);
+          if (!placed) {
+            var bar = doc.querySelector(".st-key-settings_bar");
+            if (bar) bar.setAttribute("data-fallback", "1");
+          }
+        }
+      }, 150);
     }
 
     // --- Hiding on scroll --------------------------------------------------
@@ -121,7 +146,7 @@
     }
 
     // Runs on every mount so a rerun re-homes the control immediately.
-    placeSettings();
+    placeOrFallBack();
 
     // The bind guard covers only the listeners, which must not stack up; the
     // placement above is idempotent and deliberately repeats.
@@ -144,8 +169,11 @@
         placeSettings();
       }, 50);
     });
-    var root = doc.querySelector('[data-testid="stAppViewContainer"]') || doc.body;
-    if (root) observer.observe(root, { childList: true, subtree: true });
+    // Observing the body, not the app view container: the header is a sibling
+    // of that container, so header changes - including the navigation
+    // appearing for the first time - produced no mutation there and the
+    // placement was never retried.
+    observer.observe(doc.body, { childList: true, subtree: true });
 
     win.__topbarBound = true;
     var initial = scroller();

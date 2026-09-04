@@ -720,6 +720,16 @@ def css(mode: str = "dark") -> str:
      appears in the content for a frame and then jumps to the header is worse
      than one that simply arrives in the right place. */
   .st-key-settings_bar {{ display: none !important; }}
+  /* The fallback the component sets if the header never appears, so the
+     control is reachable even when the move fails. */
+  .st-key-settings_bar[data-fallback] {{
+    display: flex !important; justify-content: flex-end;
+    min-height: 0 !important; margin-bottom: -.35rem;
+  }}
+  .st-key-settings_bar[data-fallback] [data-testid="stPopoverButton"] {{
+    height: 34px !important; min-height: 34px !important;
+    max-height: 34px !important;
+  }}
   .st-key-settings_bar[data-in-topbar] {{
     display: flex !important;
     align-items: center !important;
