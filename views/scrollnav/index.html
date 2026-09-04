@@ -31,8 +31,12 @@
       return; // Cross-origin: leave the nav permanently visible.
     }
     // The remount guard. Without it every rerun adds another listener.
+    //
+    // Set only once the listener is genuinely attached. Setting it up front
+    // was a silent, permanent failure: the first attempt could run before
+    // Streamlit had built the scroll container, and the guard then blocked
+    // every later attempt from ever trying again.
     if (win.__navScrollBound) return;
-    win.__navScrollBound = true;
 
     var HIDE_CLASS = "nav-hidden";
     // Far enough down that the nav does not flicker while the page settles,
@@ -73,21 +77,15 @@
       win.requestAnimationFrame(apply);
     }
 
-    function bind() {
-      var el = scroller();
-      if (!el) return false;
-      el.addEventListener("scroll", onScroll, { passive: true });
-      lastY = el.scrollTop;
-      return true;
-    }
+    // Listen on the document in the capture phase rather than on the scroll
+    // container itself. Scroll events do not bubble, but they are visible
+    // going down, so this catches the container whenever Streamlit gets round
+    // to creating it - and keeps working when React later replaces it, which
+    // an element-level listener would not survive.
+    doc.addEventListener("scroll", onScroll, { capture: true, passive: true });
+    win.__navScrollBound = true;
 
-    // The main container does not exist yet on the very first frame, so keep
-    // trying briefly rather than binding to nothing and silently doing nothing.
-    if (!bind()) {
-      var tries = 0;
-      var timer = win.setInterval(function () {
-        if (bind() || ++tries > 40) win.clearInterval(timer);
-      }, 100);
-    }
+    var initial = scroller();
+    if (initial) lastY = initial.scrollTop;
   })();
 </script>
