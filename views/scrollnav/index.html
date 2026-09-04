@@ -61,11 +61,22 @@
 
       var y = el.scrollTop;
       var delta = y - lastY;
-      if (Math.abs(delta) < DEADZONE) return;
 
-      if (delta > 0 && y > ARM_AT) {
+      // Near the top the bar is always shown, whatever direction the last
+      // movement was. Deciding purely on direction left it stuck off-screen
+      // after a jump back to the top - which is precisely where it has to be
+      // visible - because that jump is one event and the state never reset.
+      if (y <= ARM_AT) {
+        header.classList.remove(HIDE_CLASS);
+        lastY = y;
+        return;
+      }
+
+      // Below that, direction decides, ignoring jitter too small to be intent.
+      if (Math.abs(delta) < DEADZONE) return;
+      if (delta > 0) {
         header.classList.add(HIDE_CLASS);
-      } else if (delta < 0) {
+      } else {
         header.classList.remove(HIDE_CLASS);
       }
       lastY = y;
