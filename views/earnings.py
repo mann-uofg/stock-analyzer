@@ -1,20 +1,23 @@
-"""Earnings view: what is reporting, when, and what it usually does.
+"""Earnings view: who reports when, across the whole market.
 
 Earnings are the one scheduled event that overrides everything else on a chart.
 A stock can look clean on every indicator and still fall 12% the morning after
-a report, so this page answers the questions that actually precede a decision:
-what is coming in the next few weeks, whether it lands before the open or after
-the close, what is expected of it, and how violently this particular company
-tends to react when it reports.
+a report, so this page answers the questions that precede a decision: what is
+coming, whether it lands before the open or after the close, what is expected
+of it, and how violently that company tends to react when it reports.
 
-The dates run across the top; the companies reporting on the selected date sit
-underneath; opening one pulls up its full record.
+The calendar covers every US listing rather than only the names already held or
+watched, because a calendar you can only look up is no use for finding anything
+new. Holdings are marked, not filtered to.
+
+Dates run across the top and are clicked directly; the companies reporting on
+the selected day sit underneath, largest first, and opening one pulls up its
+full record.
 """
 
 from __future__ import annotations
 
 import datetime as dt
-from collections import defaultdict
 from typing import Any
 
 import streamlit as st
@@ -22,10 +25,7 @@ import streamlit as st
 from analyzer import earnings as earn, interpret, store
 
 from .common import (
-    REFRESH_SECONDS,
     earnings_brief,
-    earnings_events,
-    earnings_pending,
     escape,
     finding,
     fmt,
@@ -38,13 +38,20 @@ from .common import (
     stat_grid,
 )
 
-# Matches the watchlist and portfolio: one batch of new lookups per pass, so a
-# large universe cannot exhaust the memory a free container has.
-LOOKUP_BATCH = 40
+# How many days the strip shows at once. Ten weekdays is a fortnight of trading
+# and still fits one row without the cards becoming unreadable.
+STRIP_DAYS = 10
 
-# How far ahead the calendar looks. Beyond a quarter the dates are provisional
-# and mostly noise.
-HORIZON_DAYS = 95
+# A peak day runs past three hundred companies, most of them too small to be
+# why anyone opened this page.
+PAGE_SIZE = 25
+
+SIZE_FILTERS: dict[str, float] = {
+    "Any size": 0.0,
+    "Over $2B": 2e9,
+    "Over $10B": 1e10,
+    "Over $100B": 1e11,
+}
 
 SESSION_TONE = {earn.BEFORE: "warn", earn.AFTER: "buy", earn.UNKNOWN: "hold"}
 SESSION_SHORT = {
@@ -52,76 +59,69 @@ SESSION_SHORT = {
 }
 
 
-def _universe() -> tuple[str, ...]:
-    """Everything held or watched, which is what a calendar should cover."""
-    owned = [p["symbol"] for p in store.load_portfolio() if p.get("symbol")]
-    watched = store.watchlist_symbols()
-    return tuple(sorted(set(owned) | set(watched)))
-
-
-def _date_label(iso: str) -> str:
-    day = dt.date.fromisoformat(iso)
-    return f"{day:%a} {day.day} {day:%b}"
+def _weekdays(start: dt.date, count: int) -> list[dt.date]:
+    """``count`` weekdays from ``start``. Markets do not report at weekends."""
+    days, cursor = [], start
+    while len(days) < count:
+        if cursor.weekday() < 5:
+            days.append(cursor)
+        cursor += dt.timedelta(days=1)
+    return days
 
 
 def _relative(days: int) -> str:
-    if days <= 0:
+    if days < 0:
+        return f"{abs(days)}d ago"
+    if days == 0:
         return "today"
     if days == 1:
         return "tomorrow"
     if days < 14:
         return f"in {days} days"
-    if days < 60:
-        return f"in {days // 7} weeks"
-    return f"in {days // 30} months"
+    return f"in {days // 7} weeks"
+
+
+def _date_label(day: dt.date) -> str:
+    return f"{day:%a} {day.day} {day:%b}"
+
+
+def _followed() -> set[str]:
+    """Everything held or watched, marked rather than filtered to."""
+    owned = {p["symbol"] for p in store.load_portfolio() if p.get("symbol")}
+    return owned | set(store.watchlist_symbols())
 
 
 # --- The strip ------------------------------------------------------------
 
 
-def _strip(by_date: dict[str, list[dict]]) -> str:
-    """A visual summary of the calendar, above the selector."""
-    cells = []
-    today = dt.date.today()
-    for iso in sorted(by_date):
-        events = by_date[iso]
-        day = dt.date.fromisoformat(iso)
-        away = (day - today).days
-        owned = sum(1 for e in events if e.get("owned"))
-        cells.append(
-            f"<div class='cal-day'>"
-            f"<div class='cal-dow'>{escape(f'{day:%a}')}</div>"
-            f"<div class='cal-num'>{day.day}</div>"
-            f"<div class='cal-mon'>{escape(f'{day:%b}')}</div>"
-            f"<div class='cal-count'>{len(events)}"
-            f"{' · ' + str(owned) + ' held' if owned else ''}</div>"
-            f"<div class='cal-away'>{escape(_relative(away))}</div>"
-            f"</div>"
-        )
-    return f"<div class='cal-strip'>{''.join(cells)}</div>"
+def _day_label(day: dt.date) -> str:
+    """The face of a date card, as a button label.
+
+    Drawn as the button rather than as cards above a row of buttons: a
+    Streamlit button's label is markdown, so the card can be the hit target
+    instead of merely sitting near one. Two trailing spaces are a markdown
+    line break.
+    """
+    return f"{day:%a}  \n**{day.day}**  \n{day:%b}"
 
 
-def _company_card(event: dict[str, Any]) -> str:
-    """One company on the selected date."""
-    session = event.get("session", earn.UNKNOWN)
-    estimate = event.get("eps_estimate")
-    spread = event.get("eps_spread_pct")
-    held = ("<span class='pill buy' style='margin-left:.4rem'>Held</span>"
-            if event.get("owned") else "")
-    disputed = (
-        "<div class='row-sub'>Yahoo lists two dates a day apart for this one</div>"
-        if event.get("date_disputed") else ""
-    )
+def _company_row(row: dict[str, Any], followed: bool) -> str:
+    cap = row.get("market_cap")
+    estimate = row.get("eps_estimate")
+    session = row.get("session", earn.UNKNOWN)
+    held = ("<span class='pill buy' style='margin-left:.4rem'>Following</span>"
+            if followed else "")
     return (
         f"<div class='earn-card'>"
         f"<div class='earn-head'>"
-        f"<span class='row-sym'>{escape(event['symbol'])}</span>{held}"
+        f"<span class='row-sym'>{escape(row['symbol'])}</span>{held}"
         f"<span class='pill {SESSION_TONE.get(session, 'hold')}'>"
         f"{escape(SESSION_SHORT.get(session, 'Time TBC'))}</span></div>"
+        f"<div class='row-name'>{escape((row.get('name') or '')[:44])}</div>"
         f"<div class='earn-meta'>"
         f"Expected EPS <b>{fmt(estimate, 2) if estimate is not None else '—'}</b>"
-        f"{f' · analysts differ by {spread:.0f}%' if spread is not None else ''}"
-        f"</div>{disputed}</div>"
+        f"{f' · {cap / 1e9:,.0f}B market cap' if cap else ''}"
+        f"</div></div>"
     )
 
 
@@ -200,26 +200,31 @@ def _history_table(brief: dict[str, Any]) -> None:
     )
 
 
-def _detail(symbol: str) -> None:
+def _detail(symbol: str, listing: dict[str, Any] | None = None) -> None:
     with st.spinner(f"Pulling {symbol}'s earnings record…"):
         brief = earnings_brief(symbol)
 
     event, stats = brief.get("event"), brief.get("stats") or {}
     st.markdown(f"## {symbol}")
+    if listing and listing.get("name"):
+        st.caption(listing["name"])
 
-    if event:
-        price = quote(symbol)
-        html(stat_grid([
-            stat("Reports", _date_label(event["date"]),
-                 sub=_relative(event["days_away"])),
-            stat("Session", SESSION_SHORT.get(event["session"], "Time TBC"),
-                 sub=earn.SESSION_NOTE.get(event["session"], "")),
-            stat("Expected EPS", fmt(event.get("eps_estimate"), 2),
-                 sub=(f"range {fmt(event.get('eps_low'), 2)}–"
-                      f"{fmt(event.get('eps_high'), 2)}"
-                      if event.get("eps_low") is not None else "")),
-            stat("Price now", money(price) if price else "—"),
-        ]))
+    # Nasdaq states the session outright; Yahoo only implies it from a
+    # timestamp it often gets wrong, so the listing wins where they disagree.
+    session = (listing or {}).get("session") or (event or {}).get("session")
+    price = quote(symbol)
+    html(stat_grid([
+        stat("Reports", _date_label(dt.date.fromisoformat((listing or event)["date"]))
+             if (listing or event) else "—",
+             sub=_relative((event or {}).get("days_away", 0)) if event else ""),
+        stat("Session", SESSION_SHORT.get(session, "Time TBC"),
+             sub=earn.SESSION_NOTE.get(session, "")),
+        stat("Expected EPS",
+             fmt((listing or {}).get("eps_estimate")
+                 if (listing or {}).get("eps_estimate") is not None
+                 else (event or {}).get("eps_estimate"), 2)),
+        stat("Price now", money(price) if price else "—"),
+    ]))
 
     readings = interpret.read_many([
         ("days_to_earnings", (event or {}).get("days_away")),
@@ -253,106 +258,114 @@ def _detail(symbol: str) -> None:
 # --- Page -----------------------------------------------------------------
 
 
-@st.fragment(run_every=REFRESH_SECONDS)
-def _calendar(universe: tuple[str, ...]) -> None:
-    outstanding = len(earnings_pending(universe))
-    if outstanding:
-        with st.spinner(
-            f"Checking {min(outstanding, LOOKUP_BATCH)} of {len(universe)} "
-            f"symbols for scheduled reports…"
-        ):
-            events = earnings_events(universe, limit=LOOKUP_BATCH)
-    else:
-        events = earnings_events(universe)
-
-    remaining = earnings_pending(universe)
-    if remaining:
-        st.info(
-            f"{len(remaining)} of {len(universe)} symbols still to check — "
-            "done in batches so a large list cannot exhaust the server."
-        )
-        if st.button(f"Check the next {min(len(remaining), LOOKUP_BATCH)}",
-                     type="primary"):
-            st.rerun()
-
-    owned = set(p["symbol"] for p in store.load_portfolio() if p.get("symbol"))
-    horizon = dt.date.today() + dt.timedelta(days=HORIZON_DAYS)
-    by_date: dict[str, list[dict]] = defaultdict(list)
-    for event in events:
-        if dt.date.fromisoformat(event["date"]) > horizon:
-            continue
-        event["owned"] = event["symbol"] in owned
-        by_date[event["date"]].append(event)
-
-    if not by_date:
-        html("<div class='muted'>Nothing you follow has a scheduled report in "
-             "the next three months. Funds, currencies and crypto never will — "
-             "only individual companies report.</div>")
-        return
-
-    held_count = sum(1 for e in events if e["symbol"] in owned)
-    soonest = min(by_date)
-    days = (dt.date.fromisoformat(soonest) - dt.date.today()).days
-    html(plain_summary(
-        f"{len(events)} scheduled reports across {len(by_date)} dates"
-        f"{f', {held_count} of them companies you hold' if held_count else ''}. "
-        f"The next is {_relative(days)}."
-    ))
-
-    html(_strip(by_date))
-
-    dates = sorted(by_date)
-    chosen = st.segmented_control(
-        "Date", dates, format_func=_date_label, default=dates[0],
-        key="_earn_date",
-    )
-    if not chosen:
-        chosen = dates[0]
-
-    st.subheader(f"Reporting {_date_label(chosen)}")
-    for event in sorted(by_date[chosen], key=lambda e: e["symbol"]):
-        left, right = st.columns([4, 1])
-        with left:
-            html(_company_card(event))
-        with right:
-            if st.button("Details", key=f"open_{event['symbol']}",
-                         width="stretch"):
-                st.session_state["_earn_symbol"] = event["symbol"]
-
-    if selected := st.session_state.get("_earn_symbol"):
-        st.divider()
-        _detail(selected)
-
-
 def render() -> None:
     st.markdown("# Earnings")
 
-    universe = _universe()
-    if not universe:
-        html(
-            "<div class='muted'>Nothing to schedule yet. Import a portfolio or "
-            "add watchlist symbols and their reporting dates appear here.</div>"
-        )
+    offset = st.session_state.get("_earn_offset", 0)
+    days = _weekdays(dt.date.today() + dt.timedelta(days=offset), STRIP_DAYS)
+    chosen = st.session_state.get("_earn_date") or days[0].isoformat()
+    # Paging past the selected day leaves it selected but off the strip; keep
+    # the selection inside the window the reader can see.
+    if chosen not in {d.isoformat() for d in days}:
+        chosen = days[0].isoformat()
+
+    with st.container(key="cal_strip"):
+        cols = st.columns([0.6] + [1] * STRIP_DAYS + [0.6],
+                          vertical_alignment="center")
+        with cols[0]:
+            if st.button("‹", key="earn_prev", width="stretch", help="Earlier"):
+                st.session_state["_earn_offset"] = offset - STRIP_DAYS
+                st.session_state.pop("_earn_date", None)
+                st.rerun()
+        for i, day in enumerate(days):
+            iso = day.isoformat()
+            with cols[i + 1]:
+                if st.button(_day_label(day), key=f"earn_d_{iso}",
+                             width="stretch",
+                             type="primary" if iso == chosen else "secondary"):
+                    st.session_state["_earn_date"] = iso
+                    st.session_state.pop("_earn_symbol", None)
+                    st.session_state.pop("_earn_limit", None)
+                    st.rerun()
+        with cols[-1]:
+            if st.button("›", key="earn_next", width="stretch", help="Later"):
+                st.session_state["_earn_offset"] = offset + STRIP_DAYS
+                st.session_state.pop("_earn_date", None)
+                st.rerun()
+    st.caption(
+        f"{_relative((days[0] - dt.date.today()).days).capitalize()} — "
+        f"{_date_label(days[-1])}. Weekdays only."
+    )
+
+    controls = st.columns([2, 2, 3], vertical_alignment="bottom")
+    with controls[0]:
+        size = st.selectbox("Company size", list(SIZE_FILTERS), index=1)
+    with controls[1]:
+        mine_only = st.toggle("Only what I follow", value=False)
+
+    with st.spinner(f"Loading {_date_label(dt.date.fromisoformat(chosen))}…"):
+        listings = earn.market_day(chosen)
+
+    if not listings:
+        html("<div class='muted'>Nothing scheduled for this date. Weekends and "
+             "market holidays are empty, and the calendar thins out between "
+             "reporting seasons.</div>")
         return
 
-    st.caption(
-        f"{len(universe)} symbols you hold or follow · refreshes hourly"
-    )
-    _calendar(universe)
+    followed = _followed()
+    floor = SIZE_FILTERS[size]
+    shown = [
+        r for r in listings
+        if (r.get("market_cap") or 0) >= floor
+        and (not mine_only or r["symbol"] in followed)
+    ]
+    mine_count = sum(1 for r in listings if r["symbol"] in followed)
+
+    html(plain_summary(
+        f"{len(listings)} companies report on "
+        f"{_date_label(dt.date.fromisoformat(chosen))}"
+        f"{f', {mine_count} of them names you follow' if mine_count else ''}. "
+        f"{len(shown)} shown at this size filter, largest first."
+    ))
+
+    if not shown:
+        st.info("Nothing at this size on this date. Try a smaller floor.")
+        return
+
+    limit = st.session_state.get("_earn_limit", PAGE_SIZE)
+    for row in shown[:limit]:
+        left, right = st.columns([4, 1])
+        with left:
+            html(_company_row(row, row["symbol"] in followed))
+        with right:
+            if st.button("Details", key=f"open_{row['symbol']}_{chosen}",
+                         width="stretch"):
+                st.session_state["_earn_symbol"] = row["symbol"]
+                st.rerun()
+
+    if len(shown) > limit:
+        if st.button(f"Show {min(PAGE_SIZE, len(shown) - limit)} more "
+                     f"of {len(shown)}", width="stretch"):
+            st.session_state["_earn_limit"] = limit + PAGE_SIZE
+            st.rerun()
+
+    if selected := st.session_state.get("_earn_symbol"):
+        st.divider()
+        listing = next((r for r in listings if r["symbol"] == selected), None)
+        _detail(selected, listing)
 
     with st.expander("How to read this page"):
         st.markdown(
             "**Before the open** means the reaction lands in that day's "
-            "session. **After the close** — which most large companies choose — "
-            "means it lands the next morning, usually as a gap, so a stop set "
-            "the evening before does not protect you at the price you set it.\n\n"
+            "session. **After the close** — which most large companies choose "
+            "— means it lands the next morning, usually as a gap, so a stop "
+            "set the evening before does not protect you at the price you set "
+            "it.\n\n"
             "**Expected EPS** is the analyst consensus. Beating it is normal: "
             "most companies guide so that they can. What moves a stock is the "
             "*size* of the beat against what was already priced in, and the "
             "outlook management gives alongside it.\n\n"
-            "**How much could it move** compares what options are pricing "
-            "against what this company has actually done on its recent "
-            "reports. That comparison only exists close to the date — an "
-            "option expiring weeks after the report is mostly pricing ordinary "
-            "time, not the event."
+            "The list covers every US listing reporting that day, ordered by "
+            "size, so it is a place to find names as well as to check your "
+            "own. Anything you hold or watch is marked **Following**."
         )

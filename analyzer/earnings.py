@@ -182,6 +182,68 @@ def upcoming(symbol: str, earnings_df: pd.DataFrame | None = None,
     }
 
 
+# Nasdaq states the session outright, which Yahoo's timestamps only imply.
+_NASDAQ_SESSION = {
+    "time-pre-market": BEFORE,
+    "time-after-hours": AFTER,
+    "time-not-supplied": UNKNOWN,
+}
+
+
+def _money(text: Any) -> float | None:
+    """A currency figure from Nasdaq's formatting.
+
+    Values arrive as ``$4,789,956,000,000`` and, for a loss, in accountant's
+    parentheses: ``($0.09)`` means minus nine cents, not positive nine.
+    """
+    if text is None:
+        return None
+    raw = str(text).strip()
+    if not raw or raw in {"-", "N/A"}:
+        return None
+    negative = raw.startswith("(") and raw.endswith(")")
+    cleaned = raw.strip("()").replace("$", "").replace(",", "").strip()
+    if not cleaned:
+        return None
+    try:
+        value = float(cleaned)
+    except ValueError:
+        return None
+    return -value if negative else value
+
+
+def market_day(day: str) -> list[dict[str, Any]]:
+    """Everyone reporting on one date, largest company first.
+
+    Ordered by market capitalisation because this list is for finding names
+    worth a look, and on a peak day it runs to three hundred companies - most
+    of them too small or too illiquid to be the reason anyone opened the page.
+    """
+    rows = datafeed.market_earnings(day)
+    out: list[dict[str, Any]] = []
+    for row in rows:
+        symbol = (row.get("symbol") or "").strip().upper()
+        if not symbol:
+            continue
+        session = _NASDAQ_SESSION.get(row.get("time"), UNKNOWN)
+        out.append({
+            "symbol": symbol,
+            "name": (row.get("name") or "").strip(),
+            "date": day,
+            "session": session,
+            "session_label": SESSION_LABEL[session],
+            "eps_estimate": _money(row.get("epsForecast")),
+            "market_cap": _money(row.get("marketCap")),
+            "estimates": _money(row.get("noOfEsts")),
+            "last_year_eps": _money(row.get("lastYearEPS")),
+            "fiscal_quarter": (row.get("fiscalQuarterEnding") or "").strip(),
+        })
+    # Unknown capitalisation sorts last rather than first, which is what a
+    # plain descending sort on None-as-zero would do.
+    out.sort(key=lambda r: (r["market_cap"] is None, -(r["market_cap"] or 0)))
+    return out
+
+
 def past_events(earnings_df: pd.DataFrame | None,
                 price_df: pd.DataFrame | None,
                 limit: int = 8) -> list[dict[str, Any]]:

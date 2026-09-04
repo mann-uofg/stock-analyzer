@@ -418,21 +418,30 @@ def css(mode: str = "dark") -> str:
 
   /* ---------- Earnings calendar ------------------------------------------- */
 
-  /* The strip scrolls sideways rather than wrapping: a calendar that reflows
-     into rows stops reading as a timeline. */
-  .cal-strip {{ display: flex; gap: .55rem; overflow-x: auto; padding: .2rem .1rem .6rem;
-                scrollbar-width: thin; }}
-  .cal-day {{ flex: 0 0 auto; min-width: 92px; text-align: center;
-              padding: .7rem .6rem .6rem; border-radius: var(--r-md);
-              background: var(--glass); border: 1px solid var(--glass-edge);
-              box-shadow: 0 1px 2px var(--shadow); }}
-  .cal-dow {{ font-size: .66rem; text-transform: uppercase; letter-spacing: .08em;
-              color: var(--faint); font-weight: 640; }}
-  .cal-num {{ font-size: 1.5rem; font-weight: 700; line-height: 1.1;
-              color: var(--text); font-variant-numeric: tabular-nums; }}
-  .cal-mon {{ font-size: .72rem; color: var(--dim); margin-bottom: .35rem; }}
-  .cal-count {{ font-size: .68rem; font-weight: 640; color: var(--accent); }}
-  .cal-away {{ font-size: .62rem; color: var(--faint); margin-top: .15rem; }}
+  /* The date strip. Each day is a button rather than a card sitting above
+     one, so the card itself is the hit target - the reader clicks the date
+     they see. Streamlit renders a button label as markdown, which is what
+     makes a three-line card possible at all. */
+  .st-key-cal_strip [data-testid="stHorizontalBlock"] {{ gap: .3rem !important; }}
+  .st-key-cal_strip button {{
+    height: auto !important; min-height: 66px;
+    padding: .5rem .15rem !important;
+    border-radius: var(--r-md) !important;
+    line-height: 1.25 !important;
+  }}
+  .st-key-cal_strip button p {{
+    margin: 0 !important; font-size: .66rem !important;
+    line-height: 1.4 !important; color: var(--dim);
+    text-transform: uppercase; letter-spacing: .05em;
+  }}
+  .st-key-cal_strip button strong {{
+    font-size: 1.3rem; font-weight: 700; color: var(--text);
+    letter-spacing: -.02em; text-transform: none;
+  }}
+  /* The selected day is a primary button; its own ink has to win over the
+     muted colours above. */
+  .st-key-cal_strip button[kind="primary"] p,
+  .st-key-cal_strip button[kind="primary"] strong {{ color: inherit !important; }}
 
   .earn-card {{ padding: .75rem .9rem; border-radius: var(--r-md);
                 background: var(--glass); border: 1px solid var(--glass-edge);

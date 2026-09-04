@@ -13,6 +13,7 @@ import warnings
 from typing import Any, Callable
 
 import pandas as pd
+import requests
 import yfinance as yf
 
 from .cache import get_or_fetch
@@ -175,6 +176,51 @@ def earnings_calendar(ticker: str, use_cache: bool = True) -> dict[str, Any]:
 
     return get_or_fetch("calendar", ticker, _fetch, ttl=6 * 3600,
                         use_cache=use_cache) or {}
+
+
+def market_earnings(day: str, use_cache: bool = True) -> list[dict[str, Any]]:
+    """Every US company reporting on one date.
+
+    Yahoo answers "when does this company report"; nothing in yfinance answers
+    "who reports on Tuesday", which is the question a calendar is for. Nasdaq
+    publishes that per date as JSON, without a key.
+
+    It is also the better source for the session: Yahoo timestamps a future
+    report inconsistently - NVIDIA has carried a 15:00 stamp for a company that
+    has always reported after the close - while this states pre-market or
+    after-hours outright.
+
+    Cached for six hours. A day's roster changes when a company confirms or
+    moves a date, which is not a minute-by-minute event.
+    """
+
+    def _fetch() -> list[dict[str, Any]]:
+        response = _retry(lambda: requests.get(
+            "https://api.nasdaq.com/api/calendar/earnings",
+            params={"date": day},
+            headers={
+                # The endpoint returns 403 to an unadorned client.
+                "User-Agent": (
+                    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0 "
+                    "Safari/537.36"
+                ),
+                "Accept": "application/json",
+            },
+            timeout=20,
+        ))
+        if response is None or response.status_code != 200:
+            return []
+        try:
+            payload = response.json()
+        except ValueError:
+            return []
+        rows = ((payload or {}).get("data") or {}).get("rows") or []
+        return rows if isinstance(rows, list) else []
+
+    result = get_or_fetch("mktearn", day, _fetch, ttl=6 * 3600,
+                          use_cache=use_cache)
+    return result if isinstance(result, list) else []
 
 
 def analyst_estimates(ticker: str, use_cache: bool = True) -> dict[str, Any]:

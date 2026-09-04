@@ -250,3 +250,90 @@ class TestBriefRatio:
         )
         out = earnings.brief("NVDA")
         assert out["implied_vs_typical"] is None
+
+
+class TestMoneyParsing:
+    """Nasdaq's formatting, including accountant's parentheses for a loss."""
+
+    @pytest.mark.parametrize("raw,expected", [
+        ("$1.98", 1.98),
+        ("$9.56", 9.56),
+        ("$4,789,956,000,000", 4_789_956_000_000.0),
+        ("($0.09)", -0.09),          # a loss, not positive nine cents
+        ("($1,234.50)", -1234.50),
+        ("7", 7.0),
+    ])
+    def test_values(self, raw, expected):
+        assert earnings._money(raw) == pytest.approx(expected)
+
+    @pytest.mark.parametrize("raw", ["", "   ", "N/A", "-", None, "abc"])
+    def test_missing_or_unparseable(self, raw):
+        assert earnings._money(raw) is None
+
+
+class TestMarketDay:
+    @staticmethod
+    def _rows():
+        return [
+            {"symbol": "SMALL", "name": "Small Co", "time": "time-pre-market",
+             "epsForecast": "$0.10", "marketCap": "$500,000,000", "noOfEsts": "2"},
+            {"symbol": "AAPL", "name": "Apple Inc.", "time": "time-after-hours",
+             "epsForecast": "$1.98", "marketCap": "$4,789,956,000,000",
+             "noOfEsts": "7"},
+            {"symbol": "NOCAP", "name": "Unknown Cap", "time": "time-not-supplied",
+             "epsForecast": "", "marketCap": "", "noOfEsts": ""},
+            {"symbol": "MID", "name": "Mid Co", "time": "time-pre-market",
+             "epsForecast": "($0.09)", "marketCap": "$8,000,000,000",
+             "noOfEsts": "5"},
+        ]
+
+    @pytest.fixture
+    def rows(self, monkeypatch):
+        monkeypatch.setattr(earnings.datafeed, "market_earnings",
+                            lambda day, **kw: self._rows())
+
+    def test_largest_company_first(self, rows):
+        out = earnings.market_day("2026-10-29")
+        assert [r["symbol"] for r in out][:3] == ["AAPL", "MID", "SMALL"]
+
+    def test_unknown_capitalisation_sorts_last(self, rows):
+        # A plain descending sort treating None as zero would put it first.
+        assert earnings.market_day("2026-10-29")[-1]["symbol"] == "NOCAP"
+
+    def test_sessions_come_from_nasdaq_not_a_timestamp(self, rows):
+        out = {r["symbol"]: r["session"] for r in earnings.market_day("2026-10-29")}
+        assert out["AAPL"] == earnings.AFTER
+        assert out["MID"] == earnings.BEFORE
+        assert out["NOCAP"] == earnings.UNKNOWN
+
+    def test_a_forecast_loss_stays_negative(self, rows):
+        out = {r["symbol"]: r["eps_estimate"] for r in earnings.market_day("x")}
+        assert out["MID"] == pytest.approx(-0.09)
+
+    def test_rows_without_a_symbol_are_dropped(self, monkeypatch):
+        monkeypatch.setattr(earnings.datafeed, "market_earnings",
+                            lambda day, **kw: [{"symbol": "", "name": "Ghost"}])
+        assert earnings.market_day("2026-10-29") == []
+
+    def test_an_empty_day_is_not_an_error(self, monkeypatch):
+        monkeypatch.setattr(earnings.datafeed, "market_earnings",
+                            lambda day, **kw: [])
+        assert earnings.market_day("2026-01-01") == []
+
+
+class TestWeekdayStrip:
+    def test_weekends_are_skipped(self):
+        from views.earnings import _weekdays
+        # 2026-10-30 is a Friday; the next weekday is Monday the 2nd.
+        days = _weekdays(dt.date(2026, 10, 30), 3)
+        assert [d.isoformat() for d in days] == [
+            "2026-10-30", "2026-11-02", "2026-11-03"
+        ]
+
+    def test_starting_on_a_saturday_lands_on_monday(self):
+        from views.earnings import _weekdays
+        assert _weekdays(dt.date(2026, 10, 31), 1)[0] == dt.date(2026, 11, 2)
+
+    def test_always_returns_the_count_asked_for(self):
+        from views.earnings import _weekdays
+        assert len(_weekdays(dt.date(2026, 10, 30), 10)) == 10
