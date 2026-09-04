@@ -669,11 +669,12 @@ def css(mode: str = "dark") -> str:
   }}
   [data-testid="stHeader"].nav-hidden {{ transform: translateY(-100%); }}
 
-  /* Centre the links. Streamlit lays the header out as a flex row and leaves
-     the nav wherever the row puts it, which is hard left under the logo. */
-  [data-testid="stHeader"] nav,
-  [data-testid="stHeader"] > div:has([data-testid="stTopNavLink"]),
-  [data-testid="stHeader"] div:has(> [data-testid="stTopNavLink"]) {{
+  /* Centre the links. Streamlit leaves the nav hard left in the header row.
+     The element to centre is the flex row that holds every link - which is
+     `.rc-overflow`, from the overflow library Streamlit builds the nav on.
+     Its own wrapper carries only an emotion hash, and those change between
+     Streamlit versions, so this is the more durable hook of the two. */
+  [data-testid="stHeader"] .rc-overflow {{
     justify-content: center !important;
     gap: .15rem;
   }}
