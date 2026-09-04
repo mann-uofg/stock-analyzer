@@ -1,89 +1,95 @@
-"""The design system: Liquid Glass, in light and dark.
+"""The design system: flat surfaces on a quiet ground, dark by default.
 
-The look borrows Apple's Liquid Glass language, which rests on four things
-working together. Any one of them alone reads as a flat card with a blur
-filter:
+This replaces a Liquid Glass treatment - blurred translucent panels floating
+over a four-colour mesh of radial gradients. It photographed well and read
+badly: the mesh sat behind every panel at a different colour depending on where
+that panel happened to land, so identical cards looked different from each
+other for no reason a reader could act on, and a page of numbers competed with
+a background that was busier than the data.
 
-1. **An ambient ground.** Glass only looks like glass when there is something
-   behind it worth refracting. A soft mesh of colour blobs sits fixed behind
-   the whole app; every panel samples it.
-2. **Blur plus saturation.** ``backdrop-filter: blur() saturate()`` - the
-   saturation boost is what makes the material feel like glass rather than
-   frosted plastic, because real glass concentrates the colour behind it.
-3. **A specular edge.** A bright inset hairline along the top and a faint rim
-   elsewhere, so light appears to catch the lip of the panel.
-4. **Concentric radii.** Nested corners share a centre: an inner element's
-   radius is the outer radius minus its inset. Matching radii instead makes
-   the nesting look accidental.
+What replaces it is deliberately plain, in the manner of the better consumer
+finance apps:
 
-Both modes are generated from one function so a token can never drift between
-them, and motion is disabled wholesale under ``prefers-reduced-motion``.
+1. **One flat ground, one flat surface.** Two values, no gradient anywhere. A
+   card is distinguished by a hairline border and a small step in lightness,
+   which is enough and never varies with position.
+2. **Borders instead of shadows.** A hairline costs nothing, does not smear
+   under a blur filter, and keeps edges honest at any zoom.
+3. **Colour reserved for meaning.** The interface itself is greyscale, so the
+   only saturated things on screen are gains, losses, warnings and the one
+   accent. Decorative colour competes with data for the same signal.
+4. **Restraint over ornament.** No specular sweeps, no glow, no hover lift.
+   Movement is limited to what communicates state.
+
+Both modes come from one function so a token cannot drift between them, and
+motion is disabled wholesale under ``prefers-reduced-motion``.
 """
 
 from __future__ import annotations
 
 # Palettes. Only these differ between modes; every rule below is shared.
+#
+# The token names are inherited from the previous glass system - `glass` is now
+# simply the card surface and `sheen` is transparent - because several hundred
+# rules reference them. Renaming would have churned the whole stylesheet to say
+# the same thing.
 PALETTES = {
-    "light": {
-        "ground": "#eef1f8",
-        "blob1": "rgba(120,160,255,.42)",
-        "blob2": "rgba(255,170,190,.38)",
-        "blob3": "rgba(150,230,215,.34)",
-        "blob4": "rgba(210,180,255,.34)",
-        "glass": "rgba(255,255,255,.58)",
-        "glass_hi": "rgba(255,255,255,.86)",
-        "glass_edge": "rgba(255,255,255,.75)",
-        "glass_rim": "rgba(15,25,50,.09)",
-        "sheen": "rgba(255,255,255,.92)",
-        "shadow": "0 10px 34px -14px rgba(24,39,75,.28), 0 3px 10px -6px rgba(24,39,75,.18)",
-        "shadow_hi": "0 20px 48px -18px rgba(24,39,75,.40), 0 6px 16px -8px rgba(24,39,75,.24)",
-        "text": "#171a21",
-        "dim": "#5b6478",
-        "faint": "#8a92a6",
-        "accent": "#0a6cff",
-        "accent_soft": "rgba(10,108,255,.12)",
-        "gain": "#0f9d58",
-        "gain_soft": "rgba(15,157,88,.13)",
-        "loss": "#e0413c",
-        "loss_soft": "rgba(224,65,60,.12)",
-        "warn": "#c8830a",
-        "warn_soft": "rgba(200,131,10,.14)",
-        "track": "rgba(20,32,60,.10)",
-        "grid": "rgba(20,32,60,.10)",
-    },
+    # Dark is the default and the mode the palette was designed in.
     "dark": {
-        "ground": "#06070c",
-        "blob1": "rgba(58,110,255,.30)",
-        "blob2": "rgba(190,80,255,.22)",
-        "blob3": "rgba(30,200,190,.18)",
-        "blob4": "rgba(255,110,150,.16)",
-        "glass": "rgba(255,255,255,.055)",
-        "glass_hi": "rgba(255,255,255,.10)",
-        "glass_edge": "rgba(255,255,255,.14)",
-        "glass_rim": "rgba(0,0,0,.5)",
-        "sheen": "rgba(255,255,255,.22)",
-        "shadow": "0 12px 38px -16px rgba(0,0,0,.9), 0 3px 10px -6px rgba(0,0,0,.7)",
-        "shadow_hi": "0 22px 54px -20px rgba(0,0,0,.95), 0 6px 18px -8px rgba(0,0,0,.8)",
-        "text": "#f2f4f9",
-        "dim": "#a3abbd",
-        "faint": "#727b8f",
-        "accent": "#3d95ff",
-        "accent_soft": "rgba(61,149,255,.16)",
-        "gain": "#3ddc84",
-        "gain_soft": "rgba(61,220,132,.14)",
-        "loss": "#ff6b6b",
-        "loss_soft": "rgba(255,107,107,.14)",
-        "warn": "#ffc857",
-        "warn_soft": "rgba(255,200,87,.14)",
-        "track": "rgba(255,255,255,.10)",
-        "grid": "rgba(255,255,255,.08)",
+        "ground": "#0a0a0c",
+        "glass": "#141417",
+        "glass_hi": "#1c1c21",
+        "glass_edge": "rgba(255,255,255,.075)",
+        "glass_rim": "rgba(0,0,0,.35)",
+        # No specular highlights anywhere: this kills every `inset 0 1px 0`
+        # in one place rather than in eighty rules.
+        "sheen": "transparent",
+        "shadow": "none",
+        "shadow_hi": "none",
+        "text": "#f4f4f7",
+        "dim": "#9a9aa4",
+        "faint": "#6a6a75",
+        "accent": "#5b9cff",
+        "accent_soft": "rgba(91,156,255,.14)",
+        "gain": "#34d399",
+        "gain_soft": "rgba(52,211,153,.13)",
+        "loss": "#f87171",
+        "loss_soft": "rgba(248,113,113,.13)",
+        "warn": "#fbbf24",
+        "warn_soft": "rgba(251,191,36,.13)",
+        "track": "rgba(255,255,255,.09)",
+        "grid": "rgba(255,255,255,.06)",
+    },
+    "light": {
+        "ground": "#fafafb",
+        "glass": "#ffffff",
+        "glass_hi": "#f4f4f6",
+        "glass_edge": "rgba(0,0,0,.09)",
+        "glass_rim": "rgba(0,0,0,.05)",
+        "sheen": "transparent",
+        # One hairline shadow only, to lift a white card off a near-white page.
+        "shadow": "0 1px 2px rgba(0,0,0,.05)",
+        "shadow_hi": "0 1px 3px rgba(0,0,0,.08)",
+        "text": "#111114",
+        "dim": "#5a5a64",
+        "faint": "#8a8a95",
+        "accent": "#2563eb",
+        "accent_soft": "rgba(37,99,235,.10)",
+        "gain": "#0f9d58",
+        "gain_soft": "rgba(15,157,88,.11)",
+        "loss": "#d92d20",
+        "loss_soft": "rgba(217,45,32,.10)",
+        "warn": "#b45309",
+        "warn_soft": "rgba(180,83,9,.11)",
+        "track": "rgba(0,0,0,.08)",
+        "grid": "rgba(0,0,0,.07)",
     },
 }
 
 
-def css(mode: str = "light") -> str:
+def css(mode: str = "dark") -> str:
     """The full stylesheet for one mode."""
-    p = PALETTES.get(mode, PALETTES["light"])
+    p = PALETTES.get(mode, PALETTES["dark"])
     return f"""
 <style>
   /* Inter, served from this machine rather than a font CDN: a webfont request
@@ -135,29 +141,24 @@ def css(mode: str = "light") -> str:
     --zone-bad: color-mix(in srgb, {p["loss"]} 26%, transparent);
     --zone-neutral: {p["track"]};
 
-    /* Concentric radii: an inner corner is the outer minus its inset. */
-    --r-xl: 26px; --r-lg: 20px; --r-md: 14px; --r-sm: 10px;
-    --blur: 30px;
-    --spring: cubic-bezier(.34, 1.4, .64, 1);
+    /* Radii are tighter and more uniform than the concentric scheme they
+       replace: with flat cards there is no lip to echo, and a smaller radius
+       reads as more precise. */
+    --r-xl: 16px; --r-lg: 14px; --r-md: 12px; --r-sm: 8px;
+    --spring: cubic-bezier(.34, 1.2, .64, 1);
     --ease: cubic-bezier(.32, .72, 0, 1);
+
+    /* Layout. The sidebar was taking a quarter of a laptop screen while
+       holding a symbol box and four links. */
+    --sidebar-w: 236px;
+    --content-max: 1180px;
   }}
 
-  /* ---------- Ambient ground ------------------------------------------- */
+  /* ---------- Ground ----------------------------------------------------- */
 
+  /* One flat colour. The mesh of radial gradients that used to sit here made
+     every panel a slightly different shade depending on where it landed. */
   .stApp {{ background: var(--ground); }}
-
-  /* The colour behind the glass. Fixed, so panels refract a stable field
-     rather than a scrolling one. */
-  .stApp::before {{
-    content: ""; position: fixed; inset: -12%; z-index: 0; pointer-events: none;
-    background:
-      radial-gradient(46vw 42vw at 12% 8%,  {p["blob1"]}, transparent 62%),
-      radial-gradient(42vw 40vw at 88% 4%,  {p["blob2"]}, transparent 60%),
-      radial-gradient(50vw 44vw at 78% 88%, {p["blob3"]}, transparent 62%),
-      radial-gradient(40vw 38vw at 20% 92%, {p["blob4"]}, transparent 60%);
-    filter: blur(26px) saturate(120%);
-  }}
-  .stApp > * {{ position: relative; z-index: 1; }}
 
   /* ---------- Type ------------------------------------------------------ */
 
@@ -182,7 +183,17 @@ def css(mode: str = "light") -> str:
     font-family: "Material Symbols Rounded" !important;
     font-feature-settings: normal;
   }}
-  .block-container {{ padding-top: 2.4rem; padding-bottom: 6rem; max-width: 1320px; }}
+  /* Generous side padding rather than a hard centre column: with the sidebar
+     no longer eating a quarter of the window, the content can use the width
+     it has without the numbers running edge to edge. */
+  .block-container {{
+    padding-top: 2rem; padding-bottom: 5rem;
+    padding-left: 2.4rem; padding-right: 2.4rem;
+    max-width: var(--content-max);
+  }}
+  @media (max-width: 900px) {{
+    .block-container {{ padding-left: 1.1rem; padding-right: 1.1rem; }}
+  }}
 
   h1, h2, h3, h4, p, span, div, label, li {{ color: var(--text); }}
   h1 {{ font-size: 2rem !important; font-weight: 680 !important;
@@ -205,16 +216,17 @@ def css(mode: str = "light") -> str:
   [data-testid="stMetricValue"], .num, .stat-value, .row-num, .meter-val,
   .ring-num, [data-testid="stDataFrame"] {{ font-variant-numeric: tabular-nums; }}
 
-  /* ---------- The glass material ---------------------------------------- */
+  /* ---------- The card surface ------------------------------------------- */
 
+  /* A solid fill and a hairline. No blur: filtering the backdrop cost a
+     repaint on every scroll and, with a plain ground behind it, bought
+     nothing but a slight muddying of the text sitting on top. */
   .glass, .stat, .finding, .rows, div[data-testid="stExpander"] details,
   [data-testid="stDataFrame"], [data-testid="stAlert"] {{
     background: var(--glass);
-    -webkit-backdrop-filter: blur(var(--blur)) saturate(180%);
-    backdrop-filter: blur(var(--blur)) saturate(180%);
     border: 1px solid var(--glass-edge);
     border-radius: var(--r-lg);
-    box-shadow: var(--shadow), inset 0 1px 0 var(--sheen);
+    box-shadow: var(--shadow);
   }}
 
   /* ---------- Stat cards ------------------------------------------------- */
@@ -238,21 +250,13 @@ def css(mode: str = "light") -> str:
   }}
   .stat {{
     position: relative; overflow: hidden; padding: .95rem 1.05rem 1rem;
-    transition: transform .38s var(--spring), box-shadow .32s var(--ease),
-                background .32s var(--ease);
+    transition: border-color .18s var(--ease);
   }}
-  /* Specular sweep across the top lip, brightest at the left where the
-     ambient light sits. */
-  .stat::after {{
-    content: ""; position: absolute; inset: 0 0 auto 0; height: 42%;
-    background: linear-gradient(180deg, var(--glass-hi), transparent);
-    opacity: .55; pointer-events: none;
-  }}
-  .stat:hover {{
-    transform: translateY(-3px) scale(1.012);
-    box-shadow: var(--shadow-hi), inset 0 1px 0 var(--sheen);
-    background: var(--glass-hi);
-  }}
+  /* Hover marks the border only. The card used to lift, scale and brighten,
+     which on a dashboard of thirty read as the page twitching under the
+     cursor - and none of these cards are clickable, so the affordance was
+     promising something that never happened. */
+  .stat:hover {{ border-color: var(--glass-hi); }}
   .stat-label {{
     position: relative; z-index: 1; font-size: .69rem; font-weight: 620;
     letter-spacing: .06em; text-transform: uppercase; color: var(--faint);
@@ -280,10 +284,7 @@ def css(mode: str = "light") -> str:
   .verdict {{
     display: inline-flex; align-items: center; padding: .5rem 1.1rem;
     border-radius: 999px; font-weight: 680; font-size: .92rem;
-    letter-spacing: .01em; border: 1px solid var(--glass-edge);
-    -webkit-backdrop-filter: blur(var(--blur)) saturate(180%);
-    backdrop-filter: blur(var(--blur)) saturate(180%);
-    box-shadow: var(--shadow), inset 0 1px 0 var(--sheen);
+    letter-spacing: .01em; border: 1px solid transparent;
   }}
   .verdict.buy  {{ color: var(--gain); background: var(--gain-soft); }}
   .verdict.sell {{ color: var(--loss); background: var(--loss-soft); }}
@@ -300,18 +301,17 @@ def css(mode: str = "light") -> str:
   .ring-row {{ display: flex; gap: 1.8rem; flex-wrap: wrap; align-items: center;
                margin: .2rem 0 .5rem; }}
   .ring-item {{ display: flex; align-items: center; gap: .8rem; }}
+  /* The one conic gradient left in the stylesheet, and the only one that
+     carries information: it is the arc of a progress dial, not decoration. */
   .ring {{
     --pct: 0; --ring-col: var(--accent);
-    width: 62px; height: 62px; border-radius: 50%; position: relative; flex: none;
+    width: 58px; height: 58px; border-radius: 50%; position: relative; flex: none;
     background: conic-gradient(var(--ring-col) calc(var(--pct) * 1%), var(--track) 0);
     animation: sweep .9s var(--ease) both;
-    box-shadow: inset 0 1px 0 var(--sheen), var(--shadow);
   }}
   .ring::after {{
-    content: ""; position: absolute; inset: 6px; border-radius: 50%;
+    content: ""; position: absolute; inset: 5px; border-radius: 50%;
     background: var(--glass);
-    -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
-    box-shadow: inset 0 1px 0 var(--sheen);
   }}
   .ring-num {{ position: absolute; inset: 0; display: grid; place-items: center;
                font-size: .92rem; font-weight: 700; z-index: 1; }}
@@ -464,7 +464,7 @@ def css(mode: str = "light") -> str:
   .row-head:hover {{ background: none; transform: none; }}
   .row-weight {{ position: absolute; left: .85rem; bottom: .18rem; height: 2px;
                  border-radius: 999px; opacity: .5;
-                 background: linear-gradient(90deg, var(--accent), transparent);
+                 background: var(--accent);
                  transform-origin: left; animation: grow .75s var(--ease) both; }}
 
   .pill {{
@@ -518,8 +518,7 @@ def css(mode: str = "light") -> str:
 
   .stTabs [data-baseweb="tab-list"] {{
     gap: .3rem; padding: .3rem; border-radius: 999px; border: 1px solid var(--glass-edge);
-    background: var(--glass); -webkit-backdrop-filter: blur(var(--blur)) saturate(180%);
-    backdrop-filter: blur(var(--blur)) saturate(180%);
+    background: var(--glass);
     box-shadow: inset 0 1px 0 var(--sheen); width: fit-content;
   }}
   .stTabs [data-baseweb="tab"] {{
@@ -540,8 +539,6 @@ def css(mode: str = "light") -> str:
   .stButton > button {{
     border-radius: 999px; font-weight: 620; font-size: .87rem; padding: .5rem 1.1rem;
     background: var(--glass); color: var(--text); border: 1px solid var(--glass-edge);
-    -webkit-backdrop-filter: blur(var(--blur)) saturate(180%);
-    backdrop-filter: blur(var(--blur)) saturate(180%);
     box-shadow: var(--shadow), inset 0 1px 0 var(--sheen);
     transition: transform .34s var(--spring), box-shadow .3s var(--ease),
                 background .3s var(--ease);
@@ -562,7 +559,6 @@ def css(mode: str = "light") -> str:
     border-radius: 999px !important; background: var(--glass) !important;
     border: 1px solid var(--glass-edge) !important; color: var(--text) !important;
     font-size: .885rem !important; padding: .5rem .95rem !important;
-    -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px);
     box-shadow: inset 0 1px 0 var(--sheen);
     transition: border-color .28s var(--ease), box-shadow .28s var(--ease);
   }}
@@ -575,13 +571,10 @@ def css(mode: str = "light") -> str:
   [data-baseweb="select"] > div {{
     border-radius: 999px !important; background: var(--glass) !important;
     border-color: var(--glass-edge) !important; color: var(--text) !important;
-    -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px);
   }}
   [data-baseweb="popover"] div[role="listbox"], [data-baseweb="menu"] {{
     background: var(--glass) !important; border-radius: var(--r-md) !important;
     border: 1px solid var(--glass-edge) !important;
-    -webkit-backdrop-filter: blur(var(--blur)) saturate(180%) !important;
-    backdrop-filter: blur(var(--blur)) saturate(180%) !important;
     box-shadow: var(--shadow-hi) !important;
   }}
   [data-baseweb="menu"] li {{ color: var(--text) !important; }}
@@ -591,7 +584,6 @@ def css(mode: str = "light") -> str:
   [data-testid="stFileUploaderDropzone"] {{
     background: var(--glass) !important; border-radius: var(--r-lg) !important;
     border: 1px dashed var(--glass-edge) !important;
-    -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px);
   }}
 
   /* Segmented control (st.segmented_control renders as a button group).
@@ -600,8 +592,6 @@ def css(mode: str = "light") -> str:
   [data-testid="stButtonGroup"] {{
     gap: .18rem; padding: .26rem; border-radius: 999px; width: fit-content;
     background: var(--glass); border: 1px solid var(--glass-edge);
-    -webkit-backdrop-filter: blur(var(--blur)) saturate(180%);
-    backdrop-filter: blur(var(--blur)) saturate(180%);
     box-shadow: inset 0 1px 0 var(--sheen);
   }}
   [data-testid="stButtonGroup"] button {{
@@ -626,8 +616,6 @@ def css(mode: str = "light") -> str:
   [role="radiogroup"] {{
     gap: .2rem; padding: .28rem; border-radius: 999px; width: fit-content;
     background: var(--glass); border: 1px solid var(--glass-edge);
-    -webkit-backdrop-filter: blur(var(--blur)) saturate(180%);
-    backdrop-filter: blur(var(--blur)) saturate(180%);
     box-shadow: inset 0 1px 0 var(--sheen);
   }}
   [role="radiogroup"] label {{
@@ -643,18 +631,29 @@ def css(mode: str = "light") -> str:
 
   /* ---------- Sidebar ------------------------------------------------------------ */
 
+  /* Fixed and narrow. Streamlit's default is wide enough to hold a data
+     table, which is a quarter of a laptop screen given over to four nav links
+     and a symbol box - and it pushed the content that matters into a column
+     narrower than the chrome around it. */
   section[data-testid="stSidebar"] {{
     background: var(--glass);
-    -webkit-backdrop-filter: blur(40px) saturate(180%);
-    backdrop-filter: blur(40px) saturate(180%);
     border-right: 1px solid var(--glass-edge);
+    width: var(--sidebar-w) !important;
+    min-width: var(--sidebar-w) !important;
+    max-width: var(--sidebar-w) !important;
   }}
-  section[data-testid="stSidebar"] .block-container {{ padding-top: 1.6rem; }}
+  section[data-testid="stSidebar"] .block-container {{
+    padding-top: 1.4rem; padding-left: .85rem; padding-right: .85rem;
+  }}
+  /* The resize handle would let the width drift back out again. */
+  section[data-testid="stSidebar"] [data-testid="stSidebarResizeHandle"] {{
+    display: none !important;
+  }}
   [data-testid="stSidebarNav"] a {{
-    border-radius: 999px; margin: 2px .3rem; padding: .4rem .8rem !important;
-    transition: background .28s var(--ease), transform .3s var(--spring);
+    border-radius: var(--r-sm); margin: 1px .15rem; padding: .38rem .7rem !important;
+    transition: background .18s var(--ease);
   }}
-  [data-testid="stSidebarNav"] a:hover {{ background: var(--glass-hi); transform: translateX(2px); }}
+  [data-testid="stSidebarNav"] a:hover {{ background: var(--glass-hi); }}
   /* Inactive nav labels inherit Streamlit's base-theme ink, which is the wrong
      colour in whichever mode is not the configured one - they vanished
      entirely in dark. */
@@ -714,7 +713,6 @@ def css(mode: str = "light") -> str:
   [data-testid="stSidebarCollapseButton"], [data-testid="stSidebarCollapsedControl"] {{
     background: var(--glass) !important; border-radius: 999px;
     border: 1px solid var(--glass-edge);
-    -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px);
     opacity: 1 !important; visibility: visible !important;
   }}
   [data-testid="stSidebarCollapseButton"]:hover,

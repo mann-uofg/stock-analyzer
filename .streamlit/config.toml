@@ -13,13 +13,13 @@ address = "127.0.0.1"
 headless = true
 fileWatcherType = "auto"
 
-# The app paints its own Liquid Glass surfaces over an ambient ground and
-# switches light/dark at runtime, so the base theme is kept transparent and
-# neutral here. Colours live in views/theme.py.
+# Streamlit's own base theme cannot change at runtime, so it is pinned to the
+# mode the app opens in - dark. Everything Streamlit does not colour itself is
+# painted by views/theme.py, which still supports both modes at runtime.
 [theme]
-base = "light"
-primaryColor = "#0a6cff"
-backgroundColor = "#eef1f8"
-secondaryBackgroundColor = "#ffffff"
-textColor = "#171a21"
+base = "dark"
+primaryColor = "#5b9cff"
+backgroundColor = "#0a0a0c"
+secondaryBackgroundColor = "#141417"
+textColor = "#f4f4f7"
 font = "sans serif"

@@ -12,29 +12,31 @@ import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-# Charts sit on the glass, so their ground is always transparent; only the ink
+# Charts sit on a card, so their ground is always transparent; only the ink
 # changes between modes. ``set_mode`` is called once per render from app.py.
+# These values mirror views/theme.py - a chart drawn in a different green from
+# the figure beside it reads as two unrelated measurements.
 BG = "rgba(0,0,0,0)"
 FONT = 'InterVar, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'
-GRID = "rgba(20,32,60,0.10)"
-TEXT = "#171a21"
-UP, DOWN = "#0f9d58", "#e0413c"
-ACCENT = "#0a6cff"
+GRID = "rgba(255,255,255,.06)"
+TEXT = "#f4f4f7"
+UP, DOWN = "#34d399", "#f87171"
+ACCENT = "#5b9cff"
 
 _MODES = {
-    "light": {"grid": "rgba(20,32,60,.10)", "text": "#171a21",
-              "up": "#0f9d58", "down": "#e0413c", "accent": "#0a6cff"},
-    "dark": {"grid": "rgba(255,255,255,.09)", "text": "#f2f4f9",
-             "up": "#3ddc84", "down": "#ff6b6b", "accent": "#3d95ff"},
+    "dark": {"grid": "rgba(255,255,255,.06)", "text": "#f4f4f7",
+             "up": "#34d399", "down": "#f87171", "accent": "#5b9cff"},
+    "light": {"grid": "rgba(0,0,0,.07)", "text": "#111114",
+              "up": "#0f9d58", "down": "#d92d20", "accent": "#2563eb"},
 }
 
 _LAYOUT: dict[str, Any] = {}
 
 
-def set_mode(mode: str = "light") -> None:
+def set_mode(mode: str = "dark") -> None:
     """Point the chart palette at the active appearance."""
     global GRID, TEXT, UP, DOWN, ACCENT, _LAYOUT
-    palette = _MODES.get(mode, _MODES["light"])
+    palette = _MODES.get(mode, _MODES["dark"])
     GRID, TEXT = palette["grid"], palette["text"]
     UP, DOWN, ACCENT = palette["up"], palette["down"], palette["accent"]
     # Plotly draws in the browser, so it can use the same bundled face as the
@@ -51,7 +53,7 @@ def set_mode(mode: str = "light") -> None:
     )
 
 
-set_mode("light")
+set_mode("dark")
 
 
 def _axes(fig: go.Figure) -> None:

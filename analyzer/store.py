@@ -77,8 +77,18 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "risk_pct": 1.5,
     "max_position_pct": 20.0,
     "allow_fractional": True,
-    "appearance": "light",
+    "appearance": "dark",
+    # Which generation of the design a stored appearance belongs to. See
+    # THEME_EPOCH.
+    "theme_epoch": 0,
 }
+
+# Bumped when the design changes what "default" means. A stored preference from
+# an earlier look is not an informed choice about the current one - someone who
+# left the old glass theme on light never saw this palette - so an appearance
+# saved under a previous epoch is ignored once and the new default applies.
+# Choosing a mode explicitly stamps the current epoch and is then respected.
+THEME_EPOCH = 1
 
 SCHEMA_VERSION = 1
 
@@ -344,6 +354,8 @@ def load_settings() -> dict[str, Any]:
     settings = dict(DEFAULT_SETTINGS)
     if isinstance(stored, dict):
         settings.update({k: v for k, v in stored.items() if k in DEFAULT_SETTINGS})
+    if settings.get("theme_epoch") != THEME_EPOCH:
+        settings["appearance"] = DEFAULT_SETTINGS["appearance"]
     return settings
 
 

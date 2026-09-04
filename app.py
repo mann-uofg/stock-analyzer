@@ -130,7 +130,13 @@ with st.sidebar:
     )
     if chosen and chosen != st.session_state.appearance:
         st.session_state.appearance = chosen
-        store.save_settings({**store.load_settings(), "appearance": chosen})
+        # Stamping the epoch marks this as a choice made about the current
+        # design, so it survives the next default change.
+        store.save_settings({
+            **store.load_settings(),
+            "appearance": chosen,
+            "theme_epoch": store.THEME_EPOCH,
+        })
         st.rerun()
 
     # Where the data goes depends on which model is answering, so the footer
