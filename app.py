@@ -35,6 +35,9 @@ from views.theme import css  # noqa: E402
 _reset = st.query_params.get("reset") == "1"
 if _reset:
     store.forget_browser()
+    # Clearing the query parameter reruns the script, so the confirmation has
+    # to survive in session state or it is never rendered.
+    st.session_state["_was_reset"] = True
 else:
     # Restore this browser's saved state before anything reads it. On a shared
     # host the session starts empty on every visit, so without this the first
@@ -69,6 +72,8 @@ navigation = st.navigation(
 
 if _reset:
     st.query_params.clear()
+
+if st.session_state.pop("_was_reset", False):
     st.warning(
         "Saved data cleared for this browser. Everything starts fresh — "
         "re-import your portfolio, or restore the JSON export from the "
