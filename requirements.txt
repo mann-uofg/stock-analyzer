@@ -40,6 +40,7 @@ pytest==9.1.1
 # py_vollib==1.0.12
 
 # --- Static checking ---
-# Catches undefined names in the Streamlit views, which the test suite does
-# not import and py_compile cannot see.
+# Catches undefined names *within* a module. Names imported across modules are
+# covered by tests/test_view_imports.py, which loads every view: pyflakes
+# cannot tell whether `from .common import foo` will resolve.
 pyflakes==3.4.0
