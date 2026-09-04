@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<!--
+  Hides the top navigation on the way down and brings it back on the way up.
+
+  This has to be a component rather than a <script> in st.markdown, because
+  Streamlit strips scripts from markdown. The frame is same-origin with the app,
+  so it reaches the real document and attaches one listener there.
+
+  Two things make this less trivial than it looks. Streamlit scrolls an inner
+  element rather than the window, so a listener on `window` never fires. And the
+  frame remounts on every script run - which in this app is often - so the
+  listener has to be installed exactly once or the handlers pile up until
+  scrolling stutters.
+-->
+<meta charset="utf-8" />
+<script>
+  function post(type, extra) {
+    window.parent.postMessage(
+      Object.assign({ isStreamlitMessage: true, type: type }, extra || {}), "*"
+    );
+  }
+  post("streamlit:componentReady", { apiVersion: 1 });
+  post("streamlit:setFrameHeight", { height: 0 });
+
+  (function () {
+    var doc, win;
+    try {
+      win = window.parent;
+      doc = win.document;
+    } catch (err) {
+      return; // Cross-origin: leave the nav permanently visible.
+    }
+    // The remount guard. Without it every rerun adds another listener.
+    if (win.__navScrollBound) return;
+    win.__navScrollBound = true;
+
+    var HIDE_CLASS = "nav-hidden";
+    // Far enough down that the nav does not flicker while the page settles,
+    // and past the point where it would still be overlapping the page title.
+    var ARM_AT = 90;
+    // Ignore jitter: a trackpad reports a pixel of movement in both
+    // directions and the bar would strobe.
+    var DEADZONE = 6;
+
+    var lastY = 0;
+    var ticking = false;
+
+    function scroller() {
+      return doc.querySelector('[data-testid="stMain"]') || doc.scrollingElement;
+    }
+
+    function apply() {
+      ticking = false;
+      var el = scroller();
+      var header = doc.querySelector('[data-testid="stHeader"]');
+      if (!el || !header) return;
+
+      var y = el.scrollTop;
+      var delta = y - lastY;
+      if (Math.abs(delta) < DEADZONE) return;
+
+      if (delta > 0 && y > ARM_AT) {
+        header.classList.add(HIDE_CLASS);
+      } else if (delta < 0) {
+        header.classList.remove(HIDE_CLASS);
+      }
+      lastY = y;
+    }
+
+    function onScroll() {
+      if (ticking) return;
+      ticking = true;
+      win.requestAnimationFrame(apply);
+    }
+
+    function bind() {
+      var el = scroller();
+      if (!el) return false;
+      el.addEventListener("scroll", onScroll, { passive: true });
+      lastY = el.scrollTop;
+      return true;
+    }
+
+    // The main container does not exist yet on the very first frame, so keep
+    // trying briefly rather than binding to nothing and silently doing nothing.
+    if (!bind()) {
+      var tries = 0;
+      var timer = win.setInterval(function () {
+        if (bind() || ++tries > 40) win.clearInterval(timer);
+      }, 100);
+    }
+  })();
+</script>

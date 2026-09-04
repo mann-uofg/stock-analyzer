@@ -242,14 +242,20 @@ def render() -> None:
     owned, weights = _portfolio_weights()
     universe = sorted(set(watchlist) | owned)
 
-    with st.sidebar:
-        st.subheader("Feed")
+    # Scope is the control that actually gets used, so it sits in the row;
+    # the story count and a manual refresh are behind one more click.
+    scope_col, more_col, refresh_col = st.columns([4, 1.3, 1.3],
+                                                  vertical_alignment="bottom")
+    with scope_col:
         scope = st.radio(
             "Scope", ["Everything", "Holdings only", "Watchlist only"],
-            label_visibility="collapsed",
+            horizontal=True, label_visibility="collapsed",
         )
-        limit = st.slider("Stories per section", 5, 40, 12)
-        if st.button("Refresh feed", width="stretch"):
+    with more_col:
+        with st.popover("Feed", width="stretch"):
+            limit = st.slider("Stories per section", 5, 40, 12)
+    with refresh_col:
+        if st.button("Refresh", width="stretch"):
             _all_news.clear()
             _market_pulse.clear()
             st.rerun()

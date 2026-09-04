@@ -69,6 +69,37 @@ class TestPalettes:
         assert css("chartreuse") == css("dark")
 
 
+class TestNoSidebar:
+    """Navigation and controls live in the page, not in a side column."""
+
+    def test_no_view_renders_into_the_sidebar(self):
+        # A control put back in the sidebar would be invisible: navigation is
+        # top-positioned, so the sidebar never opens.
+        from pathlib import Path
+
+        root = Path(__file__).resolve().parent.parent
+        offenders = [
+            path.name
+            for path in list((root / "views").glob("*.py")) + [root / "app.py"]
+            if "st.sidebar" in path.read_text(encoding="utf-8")
+        ]
+        assert not offenders, f"sidebar used in {offenders}"
+
+    def test_navigation_is_top_positioned(self):
+        from pathlib import Path
+
+        source = (Path(__file__).resolve().parent.parent / "app.py").read_text(
+            encoding="utf-8"
+        )
+        assert 'position="top"' in source
+
+    @pytest.mark.parametrize("mode", MODES)
+    def test_the_hidden_nav_state_is_styled(self, mode):
+        # The scroll listener toggles this class; without a rule for it the
+        # nav would never move.
+        assert ".nav-hidden" in css(mode)
+
+
 class TestThemeEpochMigration:
     """A preference from the old look is not a choice about the new one."""
 

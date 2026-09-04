@@ -20,11 +20,12 @@ warnings.filterwarnings("ignore")
 st.set_page_config(
     page_title="Stock Analyzer",
     layout="wide",
-    initial_sidebar_state="expanded",
+    # Navigation is across the top; there is no sidebar to expand.
+    initial_sidebar_state="collapsed",
 )
 
 from analyzer import charts, llm, store  # noqa: E402
-from views.theme import css  # noqa: E402
+from views.theme import css, scroll_nav  # noqa: E402
 
 # An escape hatch, reachable as ?reset=1.
 #
@@ -48,10 +49,13 @@ else:
 # you left it in.
 _settings = store.load_settings()
 if "appearance" not in st.session_state:
-    st.session_state.appearance = _settings.get("appearance", "light")
+    st.session_state.appearance = _settings.get("appearance", "dark")
 
 st.markdown(css(st.session_state.appearance), unsafe_allow_html=True)
 charts.set_mode(st.session_state.appearance)
+
+# Hides the top navigation on the way down, restores it on the way up.
+scroll_nav()
 
 from views import earnings as earnings_view  # noqa: E402
 from views import news as news_view  # noqa: E402
@@ -59,6 +63,10 @@ from views import portfolio as portfolio_view  # noqa: E402
 from views import research as research_view  # noqa: E402
 from views import watchlist as watchlist_view  # noqa: E402
 
+# Navigation sits across the top rather than down the side. The sidebar cost a
+# fixed column on every page to show five links, and - because Streamlit paints
+# it after the first render - it arrived a beat late, so each reload began with
+# a blank strip where the navigation was about to be.
 navigation = st.navigation(
     [
         # The default page always serves from "/" - giving it its own url_path
@@ -69,7 +77,8 @@ navigation = st.navigation(
         st.Page(portfolio_view.render, title="Portfolio", url_path="portfolio"),
         st.Page(news_view.render, title="News", url_path="news"),
         st.Page(earnings_view.render, title="Earnings", url_path="earnings"),
-    ]
+    ],
+    position="top",
 )
 
 if _reset:
@@ -78,17 +87,36 @@ if _reset:
 if st.session_state.pop("_was_reset", False):
     st.warning(
         "Saved data cleared for this browser. Everything starts fresh — "
-        "re-import your portfolio, or restore the JSON export from the "
-        "sidebar if you have one."
+        "re-import your portfolio, or restore the JSON export from "
+        "Settings if you have one."
     )
 
-navigation.run()
+# Settings live behind one control on the right of every page. They are read
+# rarely - appearance once, the data export when moving machines - so they do
+# not warrant permanent screen space now that the sidebar is gone.
+_, _settings_col = st.columns([7, 1.35])
+with _settings_col:
+    with st.popover("Settings", width="stretch"):
+        modes = {"light": "Light", "dark": "Dark"}
+        chosen = st.segmented_control(
+            "Appearance", list(modes), format_func=lambda m: modes[m],
+            default=st.session_state.appearance, key="appearance_picker",
+        )
+        if chosen and chosen != st.session_state.appearance:
+            st.session_state.appearance = chosen
+            # Stamping the epoch marks this as a choice made about the current
+            # design, so it survives the next default change.
+            store.save_settings({
+                **store.load_settings(),
+                "appearance": chosen,
+                "theme_epoch": store.THEME_EPOCH,
+            })
+            st.rerun()
 
-with st.sidebar:
-    # Holdings live in this browser. The export exists for the two cases that
-    # storage cannot cover: moving to another device, and clearing site data.
-    if store.is_shared_host():
-        with st.expander("Your data"):
+        # Holdings live in this browser. The export exists for the two cases
+        # storage cannot cover: moving to another device, and clearing site data.
+        if store.is_shared_host():
+            st.divider()
             st.caption(
                 "Your holdings, watchlist and settings save automatically in "
                 "this browser and are restored when you come back — no account, "
@@ -114,7 +142,6 @@ with st.sidebar:
 
             # Erasing is irreversible and there is no server-side copy to
             # recover from, so it takes a deliberate second action.
-            st.divider()
             confirm = st.checkbox("I want to erase my saved data")
             if st.button("Forget this browser", width="stretch",
                          disabled=not confirm):
@@ -122,37 +149,20 @@ with st.sidebar:
                 st.success("Erased. Nothing of yours is left in this browser.")
                 st.rerun()
 
-    st.markdown("<div style='margin-top:1.6rem'></div>", unsafe_allow_html=True)
-    modes = {"light": "Light", "dark": "Dark"}
-    chosen = st.segmented_control(
-        "Appearance", list(modes), format_func=lambda m: modes[m],
-        default=st.session_state.appearance, key="appearance_picker",
-    )
-    if chosen and chosen != st.session_state.appearance:
-        st.session_state.appearance = chosen
-        # Stamping the epoch marks this as a choice made about the current
-        # design, so it survives the next default change.
-        store.save_settings({
-            **store.load_settings(),
-            "appearance": chosen,
-            "theme_epoch": store.THEME_EPOCH,
-        })
-        st.rerun()
+navigation.run()
 
-    # Where the data goes depends on which model is answering, so the footer
-    # reads the live provider rather than asserting a privacy guarantee that
-    # stopped being true the moment this moved to a cloud model.
-    where = {
-        "cloud": "Market data from Yahoo Finance. Written analysis is generated "
-                 "by a cloud model, which receives the figures for the ticker "
-                 "you analyse.",
-        "local": "Market data from Yahoo Finance. Nothing else leaves this "
-                 "machine.",
-    }.get(llm.provider(), "Market data from Yahoo Finance.")
+# Where the data goes depends on which model is answering, so the footer reads
+# the live provider rather than asserting a privacy guarantee that stopped
+# being true the moment this moved to a cloud model.
+_where = {
+    "cloud": "Market data from Yahoo Finance. Written analysis is generated "
+             "by a cloud model, which receives the figures for the ticker "
+             "you analyse.",
+    "local": "Market data from Yahoo Finance. Nothing else leaves this machine.",
+}.get(llm.provider(), "Market data from Yahoo Finance.")
 
-    st.markdown(
-        "<div class='muted' style='margin-top:1.4rem;border-top:1px solid "
-        "var(--glass-edge);padding-top:.9rem'>Analytical output only — not "
-        f"investment advice.<br>{where}</div>",
-        unsafe_allow_html=True,
-    )
+st.markdown(
+    "<div class='page-foot'>Analytical output only — not investment advice. "
+    f"{_where}</div>",
+    unsafe_allow_html=True,
+)

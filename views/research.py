@@ -43,22 +43,30 @@ from .common import (
 
 
 def _controls() -> dict[str, Any]:
-    """Sidebar controls. Only the ticker is exposed; the rest is tucked away."""
-    with st.sidebar:
+    """The search row, at the top of the page.
+
+    The ticker box and the Analyse button are the only things anyone touches
+    every visit, so they sit in the row itself; the two sets of settings behind
+    them are opened on the rare occasions they change.
+    """
+    search, action, opts, sizing = st.columns([5, 1.3, 1.25, 1.5],
+                                              vertical_alignment="bottom")
+    with search:
         symbol = st.text_input(
             "Symbol", value=st.session_state.get("ticker", ""),
             placeholder="AAPL, SHOP.TO, …",
         ).strip().upper()
-
+    with action:
         run = st.button("Analyse", type="primary", width="stretch")
 
-        with st.expander("Options"):
+    with opts:
+        with st.popover("Options", width="stretch"):
             period = st.select_slider(
                 "History", options=["1y", "2y", "3y", "5y", "max"], value="5y"
             )
             include_options = st.toggle("Option chain", value=True)
             use_llm = st.toggle("Written analysis", value=True,
-                                help="Local model. Adds one to three minutes.")
+                                help="Adds a written read of the numbers.")
             authority = st.toggle(
                 "Model sets the numbers", value=True, disabled=not use_llm,
                 help="On: the model issues the verdict and price levels, checked "
@@ -77,7 +85,8 @@ def _controls() -> dict[str, Any]:
                                   "scores its JSON and arithmetic."):
                     st.session_state["_run_bench"] = True
 
-        with st.expander("Position sizing"):
+    with sizing:
+        with st.popover("Position sizing", width="stretch"):
             settings = store.load_settings()
             book_value = _portfolio_value()
             account = st.number_input(
@@ -96,7 +105,8 @@ def _controls() -> dict[str, Any]:
                 value=float(settings["max_position_pct"]),
                 help="Ceiling on any one holding, regardless of how tight the stop is.",
             )
-            fractional = st.toggle("Fractional shares", value=bool(settings["allow_fractional"]))
+            fractional = st.toggle("Fractional shares",
+                                   value=bool(settings["allow_fractional"]))
 
             if (account, risk, cap, fractional) != (
                 settings["account_value"], settings["risk_pct"],
@@ -237,7 +247,7 @@ def render() -> None:
     if not symbol:
         st.markdown("# Research")
         st.markdown(
-            "<div class='muted'>Enter a symbol in the sidebar to analyse it. "
+            "<div class='muted'>Enter a symbol above to analyse it. "
             "Use the exchange suffix for non-US listings — <code>SHOP.TO</code> "
             "for the TSX line, <code>SHOP</code> for the NYSE one.</div>",
             unsafe_allow_html=True,
@@ -546,9 +556,9 @@ def _patterns_tab(price_df) -> None:
 def _analysis_tab(narrative, controls, engine_verdict, call) -> None:
     if not narrative:
         if controls["use_llm"]:
-            st.info("Press **Analyse** in the sidebar to generate the written analysis.")
+            st.info("Press **Analyse** above to generate the written analysis.")
         else:
-            st.info("Enable **Written analysis** in the sidebar Options, then press Analyse.")
+            st.info("Enable **Written analysis** under Options, then press Analyse.")
         return
 
     st.caption(f"Source: {narrative.get('source')}"

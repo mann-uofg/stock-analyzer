@@ -34,59 +34,69 @@ HORIZON_LABELS = {
 }
 
 
-def _add_form() -> None:
-    with st.sidebar:
-        st.subheader("Add symbols")
-        with st.form("add_watch", clear_on_submit=True):
-            typed = st.text_area(
-                "Symbols", placeholder="AMD, NVDA, SHOP.TO",
-                height=80,
-                help="One or many. Separate with commas, spaces or new lines — "
-                     "they are all added together and analysed in one pass.",
-            )
-            note = st.text_input("Note", placeholder="optional")
-            if st.form_submit_button("Add", type="primary", width="stretch"):
-                wanted = pf.parse_symbol_list(typed)
-                if not wanted:
-                    st.warning("Enter at least one symbol.")
-                else:
-                    # Apply the same qualification the importer uses, so a bare
-                    # coin ticker does not quietly track an unrelated ETF.
-                    resolved = [pf.resolve_symbol(s) for s in wanted]
-                    requalified = [
-                        f"{typed_symbol} → {actual}"
-                        for typed_symbol, actual in zip(wanted, resolved)
-                        if typed_symbol != actual
-                    ]
-                    # One write and one rerun for the whole paste; screening is
-                    # cached per symbol, so only the new names cost anything.
-                    added, skipped = store.add_many_to_watchlist(resolved, note)
+def _add_form(entries: list[dict]) -> None:
+    """Add and remove, at the top of the page.
 
-                    if added:
-                        parts = [f"Added {len(added)}: " + ", ".join(added)]
-                        if skipped:
-                            parts.append(
-                                f"{len(skipped)} already tracked "
-                                f"({', '.join(skipped)})"
-                            )
-                        if requalified:
-                            parts.append("Resolved " + ", ".join(requalified))
-                        st.session_state["_watch_msg"] = " · ".join(parts)
-                        st.rerun()
+    Open by default only when the list is empty: on a first visit adding a
+    symbol is the entire task, and after that it is occasional and should not
+    push the watchlist itself below the fold.
+    """
+    with st.expander("Add or remove symbols", expanded=not entries):
+        add, remove = st.columns([3, 1.4])
+
+        with add:
+            with st.form("add_watch", clear_on_submit=True):
+                typed = st.text_area(
+                    "Symbols", placeholder="AMD, NVDA, SHOP.TO", height=76,
+                    help="One or many. Separate with commas, spaces or new "
+                         "lines — they are all added together and analysed in "
+                         "one pass.",
+                )
+                note = st.text_input("Note", placeholder="optional")
+                if st.form_submit_button("Add", type="primary", width="stretch"):
+                    wanted = pf.parse_symbol_list(typed)
+                    if not wanted:
+                        st.warning("Enter at least one symbol.")
                     else:
-                        st.warning(
-                            "Already tracking " + ", ".join(skipped)
-                            if skipped else "Nothing to add."
-                        )
+                        # Apply the same qualification the importer uses, so a
+                        # bare coin ticker does not quietly track an unrelated
+                        # ETF.
+                        resolved = [pf.resolve_symbol(s) for s in wanted]
+                        requalified = [
+                            f"{typed_symbol} → {actual}"
+                            for typed_symbol, actual in zip(wanted, resolved)
+                            if typed_symbol != actual
+                        ]
+                        # One write and one rerun for the whole paste;
+                        # screening is cached per symbol, so only the new names
+                        # cost anything.
+                        added, skipped = store.add_many_to_watchlist(resolved,
+                                                                     note)
+                        if added:
+                            parts = [f"Added {len(added)}: " + ", ".join(added)]
+                            if skipped:
+                                parts.append(
+                                    f"{len(skipped)} already tracked "
+                                    f"({', '.join(skipped)})"
+                                )
+                            if requalified:
+                                parts.append("Resolved " + ", ".join(requalified))
+                            st.session_state["_watch_msg"] = " · ".join(parts)
+                            st.rerun()
+                        else:
+                            st.warning(
+                                "Already tracking " + ", ".join(skipped)
+                                if skipped else "Nothing to add."
+                            )
 
-        entries = store.load_watchlist()
-        if entries:
-            st.subheader("Remove")
-            target = st.selectbox("Symbol", [e["symbol"] for e in entries],
-                                  label_visibility="collapsed")
-            if st.button("Remove", width="stretch"):
-                store.remove_from_watchlist(target)
-                st.rerun()
+        with remove:
+            if entries:
+                target = st.selectbox("Remove", [e["symbol"] for e in entries])
+                if st.button("Remove", width="stretch"):
+                    store.remove_from_watchlist(target)
+                    st.rerun()
+            else:
+                st.caption("Nothing to remove yet.")
 
 
 @st.fragment(run_every=REFRESH_SECONDS)
@@ -235,15 +245,18 @@ def _table(symbols: tuple[str, ...], horizon_key: str, notes: dict[str, str]) ->
 
 def render() -> None:
     st.markdown("# Watchlist")
-    _add_form()
+
+    # Read before rendering the form, which needs to know whether the list is
+    # empty to decide whether to open itself.
+    entries = store.load_watchlist()
+    _add_form(entries)
 
     if message := st.session_state.pop("_watch_msg", None):
         st.success(message)
 
-    entries = store.load_watchlist()
     if not entries:
         html(
-            "<div class='muted'>Nothing tracked yet. Add a symbol from the sidebar, "
+            "<div class='muted'>Nothing tracked yet. Add symbols above, "
             "or from the Research page.</div>"
         )
         return

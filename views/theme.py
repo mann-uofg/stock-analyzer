@@ -27,6 +27,32 @@ motion is disabled wholesale under ``prefers-reduced-motion``.
 
 from __future__ import annotations
 
+from pathlib import Path
+from typing import Any
+
+_SCROLLNAV_DIR = Path(__file__).parent / "scrollnav"
+_scrollnav: Any = None
+
+
+def scroll_nav() -> None:
+    """Mount the listener that hides the top nav on the way down.
+
+    A component rather than a script tag because Streamlit strips scripts from
+    markdown. It renders nothing; failure here costs the auto-hide and nothing
+    else, so it never raises into the page.
+    """
+    global _scrollnav
+    try:
+        import streamlit.components.v1 as components
+
+        if _scrollnav is None:
+            _scrollnav = components.declare_component(
+                "stock_analyzer_scrollnav", path=str(_SCROLLNAV_DIR)
+            )
+        _scrollnav(key="_scrollnav")
+    except Exception:
+        pass
+
 # Palettes. Only these differ between modes; every rule below is shared.
 #
 # The token names are inherited from the previous glass system - `glass` is now
@@ -631,43 +657,56 @@ def css(mode: str = "dark") -> str:
 
   /* ---------- Sidebar ------------------------------------------------------------ */
 
-  /* Fixed and narrow. Streamlit's default is wide enough to hold a data
-     table, which is a quarter of a laptop screen given over to four nav links
-     and a symbol box - and it pushed the content that matters into a column
-     narrower than the chrome around it. */
-  section[data-testid="stSidebar"] {{
-    background: var(--glass);
-    border-right: 1px solid var(--glass-edge);
-    width: var(--sidebar-w) !important;
-    min-width: var(--sidebar-w) !important;
-    max-width: var(--sidebar-w) !important;
+  /* The header carries the navigation now. Sticky rather than fixed so it
+     participates in layout, and translated out of view by the scroll listener
+     in views/scrollnav rather than by a media query. */
+  [data-testid="stHeader"] {{
+    position: sticky; top: 0; z-index: 90;
+    background: var(--ground);
+    border-bottom: 1px solid var(--glass-edge);
+    transition: transform .26s var(--ease);
+    will-change: transform;
   }}
-  section[data-testid="stSidebar"] .block-container {{
-    padding-top: 1.4rem; padding-left: .85rem; padding-right: .85rem;
+  [data-testid="stHeader"].nav-hidden {{ transform: translateY(-100%); }}
+
+  /* Centre the links. Streamlit lays the header out as a flex row and leaves
+     the nav wherever the row puts it, which is hard left under the logo. */
+  [data-testid="stHeader"] nav,
+  [data-testid="stHeader"] > div:has([data-testid="stTopNavLink"]),
+  [data-testid="stHeader"] div:has(> [data-testid="stTopNavLink"]) {{
+    justify-content: center !important;
+    gap: .15rem;
   }}
-  /* The resize handle would let the width drift back out again. */
-  section[data-testid="stSidebar"] [data-testid="stSidebarResizeHandle"] {{
-    display: none !important;
+
+  [data-testid="stTopNavLink"] {{
+    border-radius: var(--r-sm);
+    padding: .4rem .85rem !important;
+    transition: background .18s var(--ease), color .18s var(--ease);
+    font-weight: 560;
   }}
-  [data-testid="stSidebarNav"] a {{
-    border-radius: var(--r-sm); margin: 1px .15rem; padding: .38rem .7rem !important;
-    transition: background .18s var(--ease);
+  [data-testid="stTopNavLink"], [data-testid="stTopNavLink"] * {{
+    color: var(--dim) !important;
   }}
-  [data-testid="stSidebarNav"] a:hover {{ background: var(--glass-hi); }}
-  /* Inactive nav labels inherit Streamlit's base-theme ink, which is the wrong
-     colour in whichever mode is not the configured one - they vanished
-     entirely in dark. */
-  [data-testid="stSidebarNav"] a span, [data-testid="stSidebarNav"] a p,
-  [data-testid="stSidebarNav"] li a * {{ color: var(--dim) !important; }}
-  [data-testid="stSidebarNav"] a:hover span {{ color: var(--text) !important; }}
-  [data-testid="stSidebarNav"] a[aria-current="page"] {{
-    background: var(--accent-soft); box-shadow: inset 0 1px 0 var(--sheen);
+  [data-testid="stTopNavLink"]:hover {{ background: var(--glass-hi); }}
+  [data-testid="stTopNavLink"]:hover * {{ color: var(--text) !important; }}
+  [data-testid="stTopNavLink"][aria-current="page"] {{
+    background: var(--accent-soft);
   }}
-  [data-testid="stSidebarNav"] a[aria-current="page"] span,
-  [data-testid="stSidebarNav"] a[aria-current="page"] * {{
+  [data-testid="stTopNavLink"][aria-current="page"] * {{
     color: var(--accent) !important; font-weight: 640;
   }}
-  [data-testid="stHeader"] {{ background: transparent; }}
+
+  /* The scroll listener renders nothing; Streamlit still reserves a block for
+     it, which would show as a gap under the settings row. */
+  iframe[title$="stock_analyzer_scrollnav"] {{ display: none !important; }}
+
+  /* Settings sits at the top right of the content, level with the page title
+     rather than above it. */
+  .page-foot {{
+    margin-top: 3rem; padding-top: 1rem;
+    border-top: 1px solid var(--glass-edge);
+    color: var(--faint); font-size: .76rem; line-height: 1.55;
+  }}
 
   /* ---------- Streamlit chrome contrast ------------------------------------------------
      config.toml pins Streamlit's own base theme, and it cannot change at
