@@ -47,14 +47,20 @@
     var DEADZONE = 6;
 
     var lastY = 0;
-    var ticking = false;
+    // Throttled on a clock rather than requestAnimationFrame. rAF is the usual
+    // choice for scroll work, but browsers pause it whenever the document is
+    // not being composited - a background tab, or a pane that is not on screen
+    // - and the handler would then never run, leaving the bar stuck in
+    // whichever state it was last in. The work here is reading one number and
+    // toggling one class, so a plain interval guard is enough and never stops.
+    var MIN_GAP_MS = 60;
+    var lastRun = 0;
 
     function scroller() {
       return doc.querySelector('[data-testid="stMain"]') || doc.scrollingElement;
     }
 
     function apply() {
-      ticking = false;
       var el = scroller();
       var header = doc.querySelector('[data-testid="stHeader"]');
       if (!el || !header) return;
@@ -83,9 +89,10 @@
     }
 
     function onScroll() {
-      if (ticking) return;
-      ticking = true;
-      win.requestAnimationFrame(apply);
+      var now = Date.now();
+      if (now - lastRun < MIN_GAP_MS) return;
+      lastRun = now;
+      apply();
     }
 
     // Listen on the document in the capture phase rather than on the scroll
