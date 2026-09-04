@@ -94,9 +94,14 @@ if st.session_state.pop("_was_reset", False):
 # Settings live behind one control on the right of every page. They are read
 # rarely - appearance once, the data export when moving machines - so they do
 # not warrant permanent screen space now that the sidebar is gone.
-_, _settings_col = st.columns([7, 1.35])
-with _settings_col:
-    with st.popover("Settings", width="stretch"):
+# A right-aligned container rather than a spacer column. As columns the row
+# stretched to 167px for a single button - the popover button is a flex item in
+# a stretch row, so it grew to the row height and dragged the page title down
+# with it. A keyed container aligns natively and gives the stylesheet a stable
+# hook that does not depend on an emotion hash.
+with st.container(key="settings_bar", horizontal=True,
+                  horizontal_alignment="right"):
+    with st.popover("Settings"):
         modes = {"light": "Light", "dark": "Dark"}
         chosen = st.segmented_control(
             "Appearance", list(modes), format_func=lambda m: modes[m],

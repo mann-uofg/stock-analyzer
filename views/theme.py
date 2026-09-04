@@ -62,10 +62,12 @@ def scroll_nav() -> None:
 PALETTES = {
     # Dark is the default and the mode the palette was designed in.
     "dark": {
-        "ground": "#0a0a0c",
-        "glass": "#141417",
-        "glass_hi": "#1c1c21",
-        "glass_edge": "rgba(255,255,255,.075)",
+        # Pure black, not near-black: on an OLED panel the difference is a lit
+        # pixel versus an unlit one.
+        "ground": "#000000",
+        "glass": "#0e0e11",
+        "glass_hi": "#17171b",
+        "glass_edge": "rgba(255,255,255,.085)",
         "glass_rim": "rgba(0,0,0,.35)",
         # No specular highlights anywhere: this kills every `inset 0 1px 0`
         # in one place rather than in eighty rules.
@@ -213,7 +215,7 @@ def css(mode: str = "dark") -> str:
      no longer eating a quarter of the window, the content can use the width
      it has without the numbers running edge to edge. */
   .block-container {{
-    padding-top: 2rem; padding-bottom: 5rem;
+    padding-top: .9rem; padding-bottom: 5rem;
     padding-left: 2.4rem; padding-right: 2.4rem;
     max-width: var(--content-max);
   }}
@@ -697,9 +699,29 @@ def css(mode: str = "dark") -> str:
     color: var(--accent) !important; font-weight: 640;
   }}
 
-  /* The scroll listener renders nothing; Streamlit still reserves a block for
-     it, which would show as a gap under the settings row. */
-  iframe[title$="stock_analyzer_scrollnav"] {{ display: none !important; }}
+  /* Blocks that render nothing still occupy a row and draw the vertical
+     block's 16px gap. Three of them stacked - the stylesheet, the storage
+     bridge and the scroll listener - put 48px of dead space above the page
+     title before anything visible was laid out. */
+  [data-testid="stElementContainer"]:has(iframe[title$="stock_analyzer_scrollnav"]),
+  [data-testid="stElementContainer"]:has(iframe[title$="stock_analyzer_localstore"]),
+  /* Matched tightly - a markdown block whose direct child is a style tag,
+     which is how this stylesheet itself is injected. A bare :has(style) would
+     also catch any chart that happened to inline one, and hide it. */
+  [data-testid="stElementContainer"]:has(
+    > [data-testid="stMarkdownContainer"] > style
+  ) {{
+    display: none !important;
+  }}
+
+  /* The settings row: flush to the top, and the button its natural size. */
+  .st-key-settings_bar {{ margin-bottom: -.35rem; }}
+  .st-key-settings_bar [data-testid="stPopoverButton"] {{
+    height: auto !important; min-height: 38px;
+  }}
+  .st-key-settings_bar [data-testid="stPopoverButton"] p {{
+    height: auto !important;
+  }}
 
   /* Settings sits at the top right of the content, level with the page title
      rather than above it. */
