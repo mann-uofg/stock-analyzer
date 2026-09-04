@@ -224,6 +224,31 @@ def is_crypto(symbol: str, security_type: Any = None) -> bool:
     return symbol.strip().upper() in _KNOWN_CRYPTO
 
 
+def parse_symbol_list(text: str) -> list[str]:
+    """Split a free-typed list of tickers into individual symbols.
+
+    Accepts whatever separator someone reaches for - commas, spaces, newlines,
+    semicolons, or a mix - because a watchlist is usually pasted from somewhere
+    else rather than typed one name at a time.
+
+    Exchange suffixes survive: only a trailing dot is trimmed, so "NVDA." is
+    cleaned up while "SHOP.TO" is left intact. Duplicates within one paste are
+    dropped, keeping the order they were written in.
+    """
+    if not text or not text.strip():
+        return []
+
+    out: list[str] = []
+    seen: set[str] = set()
+    for part in re.split(r"[,;\s]+", text.strip().upper()):
+        symbol = part.strip().rstrip(".")
+        if not symbol or symbol in seen:
+            continue
+        seen.add(symbol)
+        out.append(symbol)
+    return out
+
+
 def resolve_symbol(
     symbol: str,
     exchange: Any = None,

@@ -283,6 +283,35 @@ def add_to_watchlist(symbol: str, note: str = "") -> tuple[bool, str]:
     return True, f"Added {symbol}."
 
 
+def add_many_to_watchlist(symbols: list[str],
+                          note: str = "") -> tuple[list[str], list[str]]:
+    """Add several symbols in a single write. Returns ``(added, skipped)``.
+
+    One write, not one per symbol: each write marks the session dirty and every
+    caller reruns afterwards, so adding ten names one at a time meant ten
+    reruns and - before screening was cached per symbol - ten full rescreens.
+    """
+    entries = load_watchlist()
+    known = {e.get("symbol") for e in entries}
+    added: list[str] = []
+    skipped: list[str] = []
+
+    for raw in symbols:
+        symbol = raw.strip().upper()
+        if not symbol:
+            continue
+        if symbol in known:
+            skipped.append(symbol)
+            continue
+        entries.append({"symbol": symbol, "note": note.strip(), "added": _now()})
+        known.add(symbol)
+        added.append(symbol)
+
+    if added:
+        save_watchlist(entries)
+    return added, skipped
+
+
 def remove_from_watchlist(symbol: str) -> None:
     symbol = symbol.strip().upper()
     save_watchlist([e for e in load_watchlist() if e.get("symbol") != symbol])

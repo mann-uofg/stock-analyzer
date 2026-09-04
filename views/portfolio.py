@@ -50,8 +50,14 @@ from .common import (
     portfolio_risk,
     quote,
     screen,
+    screen_pending,
     since,
 )
+
+
+# Matches the watchlist: one batch of new analyses per pass, so a large book
+# cannot exhaust the memory a free container has.
+SCREEN_BATCH = 30
 
 
 def _import_panel(show_heading: bool = True) -> None:
@@ -290,7 +296,32 @@ def _analysis(positions: tuple[dict, ...]) -> None:
         )
 
 
-    analysed = {r["symbol"]: r for r in screen(symbols) if not r.get("error")}
+    # Batched for the same reason as the watchlist: analysing a large book in
+    # one pass can exhaust a free container's memory, and with holdings now
+    # persisted that failure would repeat on every load. Valuation above does
+    # not depend on this, so the page still renders while it catches up.
+    outstanding = screen_pending(symbols)
+    if outstanding:
+        with st.spinner(
+            f"Analysing {min(len(outstanding), SCREEN_BATCH)} of "
+            f"{len(symbols)} holdings…"
+        ):
+            screened = screen(symbols, limit=SCREEN_BATCH)
+    else:
+        screened = screen(symbols)
+
+    still_pending = screen_pending(symbols)
+    if still_pending:
+        st.info(
+            f"{len(still_pending)} of {len(symbols)} holdings still to "
+            "analyse — done in batches so a large book cannot exhaust the "
+            "server's memory. Your valuation above is complete either way."
+        )
+        if st.button(f"Analyse the next {min(len(still_pending), SCREEN_BATCH)}",
+                     type="primary", key="pf_more"):
+            st.rerun()
+
+    analysed = {r["symbol"]: r for r in screened if not r.get("error")}
 
     # --- Book-level read, above the detail ---------------------------------
     book = review.compute(rows, summary, analysed, base_currency)

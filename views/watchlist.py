@@ -18,9 +18,15 @@ from .common import (
     html,
     pill,
     screen,
+    screen_pending,
     spark_series,
     sparkline,
 )
+
+# One batch of new analyses per pass. Large enough that a normal watchlist
+# finishes in a single run, small enough that a long one cannot exhaust the
+# memory a free container has.
+SCREEN_BATCH = 30
 
 HORIZON_LABELS = {
     "near_term": "Near term — days to weeks",
@@ -30,22 +36,48 @@ HORIZON_LABELS = {
 
 def _add_form() -> None:
     with st.sidebar:
-        st.subheader("Add symbol")
+        st.subheader("Add symbols")
         with st.form("add_watch", clear_on_submit=True):
-            symbol = st.text_input("Symbol", placeholder="e.g. AMD").strip().upper()
+            typed = st.text_area(
+                "Symbols", placeholder="AMD, NVDA, SHOP.TO",
+                height=80,
+                help="One or many. Separate with commas, spaces or new lines — "
+                     "they are all added together and analysed in one pass.",
+            )
             note = st.text_input("Note", placeholder="optional")
             if st.form_submit_button("Add", type="primary", width="stretch"):
-                # Apply the same qualification the importer uses, so a bare
-                # coin ticker does not quietly track an unrelated ETF.
-                resolved = pf.resolve_symbol(symbol) if symbol else symbol
-                changed, message = store.add_to_watchlist(resolved, note)
-                if changed and resolved != symbol:
-                    message += f" ({symbol} resolves to a different security)"
-                if changed:
-                    st.session_state["_watch_msg"] = message
-                    st.rerun()
+                wanted = pf.parse_symbol_list(typed)
+                if not wanted:
+                    st.warning("Enter at least one symbol.")
                 else:
-                    st.warning(message)
+                    # Apply the same qualification the importer uses, so a bare
+                    # coin ticker does not quietly track an unrelated ETF.
+                    resolved = [pf.resolve_symbol(s) for s in wanted]
+                    requalified = [
+                        f"{typed_symbol} → {actual}"
+                        for typed_symbol, actual in zip(wanted, resolved)
+                        if typed_symbol != actual
+                    ]
+                    # One write and one rerun for the whole paste; screening is
+                    # cached per symbol, so only the new names cost anything.
+                    added, skipped = store.add_many_to_watchlist(resolved, note)
+
+                    if added:
+                        parts = [f"Added {len(added)}: " + ", ".join(added)]
+                        if skipped:
+                            parts.append(
+                                f"{len(skipped)} already tracked "
+                                f"({', '.join(skipped)})"
+                            )
+                        if requalified:
+                            parts.append("Resolved " + ", ".join(requalified))
+                        st.session_state["_watch_msg"] = " · ".join(parts)
+                        st.rerun()
+                    else:
+                        st.warning(
+                            "Already tracking " + ", ".join(skipped)
+                            if skipped else "Nothing to add."
+                        )
 
         entries = store.load_watchlist()
         if entries:
@@ -62,11 +94,30 @@ def _table(symbols: tuple[str, ...], horizon_key: str, notes: dict[str, str]) ->
     """Ranked watchlist. Re-runs itself hourly without a page reload."""
     # A large list takes a visible amount of time on its first pass, so say so
     # rather than showing an empty page that looks broken.
-    with st.spinner(
-        f"Analysing {len(symbols)} symbols… first run takes about "
-        f"{max(5, len(symbols) // 2)} seconds, then it is cached."
-    ):
+    outstanding = len(screen_pending(symbols))
+    if outstanding:
+        with st.spinner(
+            f"Analysing {min(outstanding, SCREEN_BATCH)} of {len(symbols)} "
+            f"symbols… results are cached, so this cost is paid once."
+        ):
+            rows = screen(symbols, limit=SCREEN_BATCH)
+    else:
         rows = screen(symbols)
+
+    # Anything beyond one batch is left for the next pass rather than analysed
+    # in one go: a long watchlist analysed all at once can exhaust the memory a
+    # free container has, which took the whole page down with it.
+    remaining = screen_pending(symbols)
+    if remaining:
+        st.info(
+            f"{len(remaining)} of {len(symbols)} symbols still to analyse. "
+            "They are done in batches so a long list cannot exhaust the "
+            "server's memory — already-analysed names are shown below."
+        )
+        if st.button(f"Analyse the next {min(len(remaining), SCREEN_BATCH)}",
+                     type="primary"):
+            st.rerun()
+
     ok = [r for r in rows if not r.get("error")]
     failed = [r for r in rows if r.get("error")]
 

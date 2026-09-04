@@ -7,6 +7,8 @@ three views share. Anything view-specific lives in the view itself.
 from __future__ import annotations
 
 import re
+import time
+import threading
 import warnings
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
@@ -501,15 +503,73 @@ def _screen_one(symbol: str, period: str) -> dict[str, Any]:
     return _screen_row(symbol, payload)
 
 
-@st.cache_data(show_spinner=False, ttl=REFRESH_SECONDS)
-def screen(symbols: tuple[str, ...], period: str = "2y") -> list[dict[str, Any]]:
+# Screen results are cached per symbol rather than per watchlist.
+#
+# They used to be memoised on the whole tuple of symbols, which meant adding
+# one name changed the cache key and re-analysed every other name from scratch.
+# Adding the twentieth symbol cost twenty analyses, so the work grew with the
+# square of the list: every entry felt like a full reload, and a long enough
+# watchlist could not finish inside the memory a free container has. Once the
+# watchlist began persisting, that turned into a loop no refresh could escape,
+# because the same doomed screen ran again on every load.
+#
+# Keyed by (symbol, period) and read on the main thread, so a new name costs
+# exactly one analysis and the rest are hits. A plain dict rather than
+# st.cache_data because the fan-out below runs in threads, which have no script
+# context to reach Streamlit's cache through. The contents are public market
+# data, so sharing one cache across visitors is safe and saves everyone work.
+_SCREEN_CACHE: dict[tuple[str, str], tuple[float, dict[str, Any]]] = {}
+_SCREEN_LOCK = threading.Lock()
+
+
+def _screen_cached(symbol: str, period: str) -> dict[str, Any] | None:
+    with _SCREEN_LOCK:
+        entry = _SCREEN_CACHE.get((symbol, period))
+    if entry is None:
+        return None
+    stored_at, row = entry
+    if time.time() - stored_at > REFRESH_SECONDS:
+        return None
+    return row
+
+
+def _screen_store(symbol: str, period: str, row: dict[str, Any]) -> None:
+    # An error row is deliberately not cached: a symbol that failed on a
+    # network blip should be retried on the next load, not held as broken for
+    # an hour.
+    if row.get("error"):
+        return
+    with _SCREEN_LOCK:
+        _SCREEN_CACHE[(symbol, period)] = (time.time(), row)
+
+
+def _screen_clear() -> None:
+    with _SCREEN_LOCK:
+        _SCREEN_CACHE.clear()
+
+
+def screen_pending(symbols: tuple[str, ...], period: str = "2y") -> list[str]:
+    """Which symbols would still need analysing, for progress reporting."""
+    return [s for s in symbols if _screen_cached(s, period) is None]
+
+
+def screen(symbols: tuple[str, ...], period: str = "2y",
+           limit: int | None = None) -> list[dict[str, Any]]:
     """Analyse many symbols for the watchlist and portfolio tables.
 
-    Fetched in parallel. Every call here is network-bound waiting on Yahoo, so
-    a serial loop costs roughly six seconds per symbol - a hundred-name
-    watchlist took over ten minutes and simply looked broken. Threads turn that
-    into a fixed wait of about a minute, and results are cached per symbol so
-    only genuinely new names cost anything on later loads.
+    Only symbols that are not already cached are fetched, so adding a name to
+    a long watchlist costs one analysis rather than a full rescreen.
+
+    ``limit`` caps how many *new* analyses one call performs. A free container
+    has about a gigabyte, and a long watchlist analysed in a single pass can
+    exhaust it - which killed the process mid-render, and once the watchlist
+    persisted, did so again on every reload. Capping the batch keeps the page
+    renderable and lets the rest be picked up on the next pass, since results
+    accumulate in the cache.
+
+    The fetch is parallel because every call here is network-bound waiting on
+    Yahoo; a serial loop costs roughly six seconds per symbol, which made a
+    hundred-name watchlist take over ten minutes and simply look broken.
 
     Options are skipped: chains are the slowest call by far and contribute
     little to a horizon ranking. One bad symbol yields an error row rather than
@@ -518,27 +578,48 @@ def screen(symbols: tuple[str, ...], period: str = "2y") -> list[dict[str, Any]]
     if not symbols:
         return []
 
-    # Modest pool: Yahoo rate-limits aggressively, and past about a dozen
-    # concurrent requests the failures cost more than the parallelism saves.
-    # A shared host gets fewer still - Community Cloud allows about a gigabyte,
-    # and eight threads each holding several years of OHLCV will exhaust it.
-    ceiling = 4 if store.is_shared_host() else 8
-    workers = max(1, min(ceiling, len(symbols)))
     results: dict[str, dict[str, Any]] = {}
-    with ThreadPoolExecutor(max_workers=workers) as pool:
-        futures = {
-            pool.submit(_screen_one, symbol, period): symbol for symbol in symbols
-        }
-        for future in as_completed(futures):
-            symbol = futures[future]
-            try:
-                results[symbol] = future.result()
-            except Exception as exc:  # noqa: BLE001
-                results[symbol] = {"symbol": symbol,
-                                   "error": f"{exc.__class__.__name__}: {exc}"}
+    missing: list[str] = []
+    for symbol in symbols:
+        row = _screen_cached(symbol, period)
+        if row is None:
+            missing.append(symbol)
+        else:
+            results[symbol] = row
+
+    if limit is not None and limit >= 0:
+        missing = missing[:limit]
+
+    if missing:
+        # Modest pool: Yahoo rate-limits aggressively, and past about a dozen
+        # concurrent requests the failures cost more than the parallelism
+        # saves. A shared host gets fewer still - Community Cloud allows about
+        # a gigabyte, and eight threads each holding several years of OHLCV
+        # will exhaust it.
+        ceiling = 4 if store.is_shared_host() else 8
+        workers = max(1, min(ceiling, len(missing)))
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            futures = {
+                pool.submit(_screen_one, symbol, period): symbol
+                for symbol in missing
+            }
+            for future in as_completed(futures):
+                symbol = futures[future]
+                try:
+                    row = future.result()
+                except Exception as exc:  # noqa: BLE001
+                    row = {"symbol": symbol,
+                           "error": f"{exc.__class__.__name__}: {exc}"}
+                results[symbol] = row
+                _screen_store(symbol, period, row)
 
     # Preserve the caller's ordering rather than completion order.
     return [results[s] for s in symbols if s in results]
+
+
+# Callers clear the screen cache to force a refresh; keep that spelling working
+# now that this is no longer an st.cache_data function.
+screen.clear = _screen_clear  # type: ignore[attr-defined]
 
 
 def _screen_row(symbol: str, payload: dict[str, Any]) -> dict[str, Any]:

@@ -26,10 +26,20 @@ st.set_page_config(
 from analyzer import charts, llm, store  # noqa: E402
 from views.theme import css  # noqa: E402
 
-# Restore this browser's saved state before anything reads it. On a shared
-# host the session starts empty on every visit, so without this the first read
-# below would see nothing and the app would open blank each time.
-store.sync_browser()
+# An escape hatch, reachable as ?reset=1.
+#
+# Persisted state is restored on every load, so a saved watchlist that cannot
+# be analysed re-triggers the same failure on each visit and refreshing never
+# clears it. Without a way in through the URL the only remedy would be the
+# browser's own developer tools, which is not a remedy at all.
+_reset = st.query_params.get("reset") == "1"
+if _reset:
+    store.forget_browser()
+else:
+    # Restore this browser's saved state before anything reads it. On a shared
+    # host the session starts empty on every visit, so without this the first
+    # read below would see nothing and the app would open blank each time.
+    store.sync_browser()
 
 # Appearance is stored, not just held in session, so the app opens in the mode
 # you left it in.
@@ -56,6 +66,14 @@ navigation = st.navigation(
         st.Page(news_view.render, title="News", url_path="news"),
     ]
 )
+
+if _reset:
+    st.query_params.clear()
+    st.warning(
+        "Saved data cleared for this browser. Everything starts fresh — "
+        "re-import your portfolio, or restore the JSON export from the "
+        "sidebar if you have one."
+    )
 
 navigation.run()
 
