@@ -19,7 +19,15 @@ import streamlit as st
 
 warnings.filterwarnings("ignore")
 
-from analyzer import datafeed, engine, horizon, llm, risk, store  # noqa: E402
+from analyzer import (  # noqa: E402
+    datafeed,
+    earnings,
+    engine,
+    horizon,
+    llm,
+    risk,
+    store,
+)
 from analyzer.config import BENCHMARKS  # noqa: E402
 from analyzer.datafeed import DataError  # noqa: E402
 
@@ -620,6 +628,87 @@ def screen(symbols: tuple[str, ...], period: str = "2y",
 # Callers clear the screen cache to force a refresh; keep that spelling working
 # now that this is no longer an st.cache_data function.
 screen.clear = _screen_clear  # type: ignore[attr-defined]
+
+
+# --- Earnings calendar ----------------------------------------------------
+#
+# Cached per symbol and batched for the same reasons as screening above: the
+# calendar spans everything held and watched, so a hundred names means a
+# hundred network calls, and doing them all in one pass is what exhausts a
+# free container.
+_EARNINGS_CACHE: dict[str, tuple[float, dict[str, Any] | None]] = {}
+_EARNINGS_LOCK = threading.Lock()
+
+
+def _earnings_cached(symbol: str) -> tuple[bool, dict[str, Any] | None]:
+    """``(hit, event)``. A symbol with no scheduled report caches as None."""
+    with _EARNINGS_LOCK:
+        entry = _EARNINGS_CACHE.get(symbol)
+    if entry is None:
+        return False, None
+    stored_at, event = entry
+    if time.time() - stored_at > REFRESH_SECONDS:
+        return False, None
+    return True, event
+
+
+def _earnings_one(symbol: str) -> dict[str, Any] | None:
+    try:
+        return earnings.upcoming(symbol)
+    except Exception:
+        # A symbol with no earnings at all - an ETF, a currency pair - is the
+        # normal case here, not an error worth surfacing.
+        return None
+
+
+def earnings_pending(symbols: tuple[str, ...]) -> list[str]:
+    return [s for s in symbols if not _earnings_cached(s)[0]]
+
+
+def earnings_events(symbols: tuple[str, ...],
+                    limit: int | None = None) -> list[dict[str, Any]]:
+    """The next scheduled report for each symbol that has one."""
+    if not symbols:
+        return []
+
+    found: dict[str, dict[str, Any] | None] = {}
+    missing: list[str] = []
+    for symbol in symbols:
+        hit, event = _earnings_cached(symbol)
+        if hit:
+            found[symbol] = event
+        else:
+            missing.append(symbol)
+
+    if limit is not None and limit >= 0:
+        missing = missing[:limit]
+
+    if missing:
+        workers = max(1, min(4 if store.is_shared_host() else 8, len(missing)))
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            futures = {pool.submit(_earnings_one, s): s for s in missing}
+            for future in as_completed(futures):
+                symbol = futures[future]
+                try:
+                    event = future.result()
+                except Exception:
+                    event = None
+                found[symbol] = event
+                with _EARNINGS_LOCK:
+                    _EARNINGS_CACHE[symbol] = (time.time(), event)
+
+    return [found[s] for s in symbols if found.get(s)]
+
+
+def earnings_clear() -> None:
+    with _EARNINGS_LOCK:
+        _EARNINGS_CACHE.clear()
+
+
+@st.cache_data(show_spinner=False, ttl=REFRESH_SECONDS)
+def earnings_brief(symbol: str) -> dict[str, Any]:
+    """The full detail for one company. Only the opened company pays for this."""
+    return earnings.brief(symbol)
 
 
 def _screen_row(symbol: str, payload: dict[str, Any]) -> dict[str, Any]:

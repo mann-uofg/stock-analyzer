@@ -53,6 +53,7 @@ if "appearance" not in st.session_state:
 st.markdown(css(st.session_state.appearance), unsafe_allow_html=True)
 charts.set_mode(st.session_state.appearance)
 
+from views import earnings as earnings_view  # noqa: E402
 from views import news as news_view  # noqa: E402
 from views import portfolio as portfolio_view  # noqa: E402
 from views import research as research_view  # noqa: E402
@@ -67,6 +68,7 @@ navigation = st.navigation(
         st.Page(watchlist_view.render, title="Watchlist", url_path="watchlist"),
         st.Page(portfolio_view.render, title="Portfolio", url_path="portfolio"),
         st.Page(news_view.render, title="News", url_path="news"),
+        st.Page(earnings_view.render, title="Earnings", url_path="earnings"),
     ]
 )
 

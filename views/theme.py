@@ -387,6 +387,43 @@ def css(mode: str = "light") -> str:
                     border-radius: var(--r-md); background: var(--glass);
                     border: 1px solid var(--glass-edge); }}
 
+  /* ---------- Earnings calendar ------------------------------------------- */
+
+  /* The strip scrolls sideways rather than wrapping: a calendar that reflows
+     into rows stops reading as a timeline. */
+  .cal-strip {{ display: flex; gap: .55rem; overflow-x: auto; padding: .2rem .1rem .6rem;
+                scrollbar-width: thin; }}
+  .cal-day {{ flex: 0 0 auto; min-width: 92px; text-align: center;
+              padding: .7rem .6rem .6rem; border-radius: var(--r-md);
+              background: var(--glass); border: 1px solid var(--glass-edge);
+              box-shadow: 0 1px 2px var(--shadow); }}
+  .cal-dow {{ font-size: .66rem; text-transform: uppercase; letter-spacing: .08em;
+              color: var(--faint); font-weight: 640; }}
+  .cal-num {{ font-size: 1.5rem; font-weight: 700; line-height: 1.1;
+              color: var(--text); font-variant-numeric: tabular-nums; }}
+  .cal-mon {{ font-size: .72rem; color: var(--dim); margin-bottom: .35rem; }}
+  .cal-count {{ font-size: .68rem; font-weight: 640; color: var(--accent); }}
+  .cal-away {{ font-size: .62rem; color: var(--faint); margin-top: .15rem; }}
+
+  .earn-card {{ padding: .75rem .9rem; border-radius: var(--r-md);
+                background: var(--glass); border: 1px solid var(--glass-edge);
+                margin-bottom: .45rem; }}
+  .earn-head {{ display: flex; align-items: center; gap: .45rem;
+                flex-wrap: wrap; margin-bottom: .3rem; }}
+  .earn-meta {{ font-size: .8rem; color: var(--dim); }}
+
+  .earn-table {{ width: 100%; border-collapse: collapse; font-size: .84rem; }}
+  .earn-table th {{ text-align: right; font-size: .68rem; font-weight: 640;
+                    text-transform: uppercase; letter-spacing: .06em;
+                    color: var(--faint); padding: .45rem .6rem;
+                    border-bottom: 1px solid var(--glass-edge); }}
+  .earn-table th:first-child, .earn-table td:first-child {{ text-align: left; }}
+  .earn-table td {{ padding: .5rem .6rem; color: var(--text);
+                    border-bottom: 1px solid var(--glass-edge); }}
+  .earn-table td.num {{ text-align: right; font-variant-numeric: tabular-nums; }}
+  .earn-table td.up {{ color: var(--gain); font-weight: 640; }}
+  .earn-table td.down {{ color: var(--loss); font-weight: 640; }}
+
   /* ---------- Findings ---------------------------------------------------- */
 
   .finding {{

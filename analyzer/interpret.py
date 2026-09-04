@@ -453,6 +453,97 @@ SPECS: dict[str, Spec] = {
                  "durable rather than a one-off."),
         ],
     ),
+    # --- earnings ---------------------------------------------------------
+    "beat_rate_pct": Spec(
+        label="Beat rate", lo=0, hi=100, digits=0, suffix="%",
+        note="A near-perfect record usually means guidance is set to be "
+             "beaten, so the beat itself is already in the price — what moves "
+             "the stock is the size of it, and the outlook.",
+        what="How often it has come in above the consensus estimate.",
+        bands=[
+            Band(40, "Misses often", BAD,
+                 "Has fallen short more than half the time. Estimates for this "
+                 "one have not been reliable."),
+            Band(60, "Mixed record", NEUTRAL,
+                 "Beats and misses in roughly equal measure."),
+            Band(85, "Usually beats", GOOD,
+                 "Comes in ahead most quarters."),
+            Band(float("inf"), "Almost always beats", GOOD,
+                 "Beats nearly every quarter — which the market knows, so a "
+                 "beat alone rarely moves it much."),
+        ],
+    ),
+    "earnings_move_pct": Spec(
+        label="Typical earnings move", lo=0, hi=15, digits=1, suffix="%",
+        note="The median of recent reports, not the average — one wild quarter "
+             "should not set the expectation.",
+        what="How far this stock usually moves on the day after results.",
+        bands=[
+            Band(2, "Barely reacts", GOOD,
+                 "Results are usually a non-event for the price."),
+            Band(5, "Moves moderately", NEUTRAL,
+                 "A normal reaction for a listed company."),
+            Band(10, "Moves hard", WARN,
+                 "Results routinely reprice this stock. A position held through "
+                 "one needs to be sized for that."),
+            Band(float("inf"), "Violent", BAD,
+                 "Reports regularly move this by more than a tenth. Holding "
+                 "through one is a bet on the report, whatever the chart says."),
+        ],
+    ),
+    "implied_vs_typical": Spec(
+        label="Priced vs its own history", lo=0, hi=3, digits=2, suffix="x",
+        note="Only meaningful when the option expiry sits just after the "
+             "report; over a longer window the premium is mostly ordinary time.",
+        what="What options price for this report, against what this company "
+             "usually delivers.",
+        bands=[
+            Band(0.8, "Priced calmly", GOOD,
+                 "Options expect less than this company's own history — the "
+                 "market is not braced for a surprise."),
+            Band(1.2, "Priced in line", NEUTRAL,
+                 "Expectations match what it normally does on results."),
+            Band(1.8, "Priced for more than usual", WARN,
+                 "The market is bracing for a bigger move than this company "
+                 "typically delivers."),
+            Band(float("inf"), "Priced for a shock", BAD,
+                 "Options expect far more than its own history — something "
+                 "specific is expected. Buying options here needs a very large "
+                 "move just to break even."),
+        ],
+    ),
+    "eps_spread_pct": Spec(
+        label="Analyst disagreement", lo=0, hi=50, digits=0, suffix="%",
+        what="How far apart the most and least optimistic analysts are, as a "
+             "share of the consensus.",
+        bands=[
+            Band(5, "Tight consensus", GOOD,
+                 "Analysts broadly agree, so the consensus is a firm reference "
+                 "point."),
+            Band(15, "Normal spread", NEUTRAL,
+                 "An ordinary range of views."),
+            Band(30, "Wide disagreement", WARN,
+                 "The single consensus figure is holding together quite "
+                 "different views — a bigger surprise either way is likelier."),
+            Band(float("inf"), "Very wide disagreement", BAD,
+                 "Analysts cannot agree what this quarter looks like. The "
+                 "consensus is close to meaningless here."),
+        ],
+    ),
+    "eps_surprise_pct": Spec(
+        label="Last surprise", lo=-25, hi=25, digits=1, suffix="%", signed=True,
+        what="How far the last reported figure landed from what was expected.",
+        bands=[
+            Band(-10, "Large miss", BAD,
+                 "Came in well below expectations."),
+            Band(-2, "Missed", WARN, "Fell short of the estimate."),
+            Band(2, "In line", NEUTRAL,
+                 "Landed essentially where it was expected to."),
+            Band(10, "Beat", GOOD, "Came in ahead of the estimate."),
+            Band(float("inf"), "Large beat", GOOD,
+                 "Came in well ahead of expectations."),
+        ],
+    ),
     "days_to_earnings": Spec(
         label="Days until earnings", lo=0, hi=90, digits=0,
         note="Earnings routinely move a stock 5-10% in a day regardless of "
@@ -474,7 +565,8 @@ SPECS: dict[str, Spec] = {
 # comparisons.
 _LOWER_IS_BETTER = {
     "trailing_pe", "forward_pe", "peg", "ev_ebitda", "put_call_ratio",
-    "iv_hv_ratio", "atr_percent",
+    "iv_hv_ratio", "atr_percent", "earnings_move_pct", "implied_vs_typical",
+    "eps_spread_pct",
 }
 
 

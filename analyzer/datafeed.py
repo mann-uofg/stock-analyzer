@@ -156,6 +156,27 @@ def earnings_history(ticker: str, use_cache: bool = True) -> pd.DataFrame:
     return get_or_fetch("earnings", ticker, _fetch, ttl=6 * 3600, use_cache=use_cache)
 
 
+def earnings_calendar(ticker: str, use_cache: bool = True) -> dict[str, Any]:
+    """The next scheduled report, with the consensus range around it.
+
+    Separate from ``earnings_history`` because it carries what that does not:
+    the high and low analyst estimates, which say how much disagreement sits
+    behind the single consensus figure, and the revenue expectation alongside
+    the EPS one.
+
+    Yahoo's two sources disagree by a day surprisingly often - the calendar and
+    the dated history can name consecutive dates for the same event - so the
+    caller decides which to trust rather than this pretending they agree.
+    """
+
+    def _fetch() -> dict[str, Any]:
+        raw = _safe(lambda: yf.Ticker(ticker).calendar)
+        return raw if isinstance(raw, dict) else {}
+
+    return get_or_fetch("calendar", ticker, _fetch, ttl=6 * 3600,
+                        use_cache=use_cache) or {}
+
+
 def analyst_estimates(ticker: str, use_cache: bool = True) -> dict[str, Any]:
     """Forward EPS/revenue consensus and price targets, where exposed."""
 
