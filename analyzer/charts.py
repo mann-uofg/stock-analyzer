@@ -22,12 +22,19 @@ GRID = "rgba(255,255,255,.06)"
 TEXT = "#f4f4f7"
 UP, DOWN = "#34d399", "#f87171"
 ACCENT = "#5b9cff"
+WARN = "#fbbf24"
+# The card a chart is drawn on. Used where a mark needs to be separated from
+# its neighbours by a gap rather than a line - a donut's segment borders, and
+# the neutral midpoint of the correlation ramp.
+SURFACE = "#141417"
 
 _MODES = {
     "dark": {"grid": "rgba(255,255,255,.06)", "text": "#f4f4f7",
-             "up": "#34d399", "down": "#f87171", "accent": "#5b9cff"},
+             "up": "#34d399", "down": "#f87171", "accent": "#5b9cff",
+             "warn": "#fbbf24", "surface": "#141417"},
     "light": {"grid": "rgba(0,0,0,.07)", "text": "#111114",
-              "up": "#0f9d58", "down": "#d92d20", "accent": "#2563eb"},
+              "up": "#0f9d58", "down": "#d92d20", "accent": "#2563eb",
+              "warn": "#b45309", "surface": "#ffffff"},
 }
 
 _LAYOUT: dict[str, Any] = {}
@@ -35,10 +42,11 @@ _LAYOUT: dict[str, Any] = {}
 
 def set_mode(mode: str = "dark") -> None:
     """Point the chart palette at the active appearance."""
-    global GRID, TEXT, UP, DOWN, ACCENT, _LAYOUT
+    global GRID, TEXT, UP, DOWN, ACCENT, WARN, SURFACE, _LAYOUT
     palette = _MODES.get(mode, _MODES["dark"])
     GRID, TEXT = palette["grid"], palette["text"]
     UP, DOWN, ACCENT = palette["up"], palette["down"], palette["accent"]
+    WARN, SURFACE = palette["warn"], palette["surface"]
     # Plotly draws in the browser, so it can use the same bundled face as the
     # rest of the page; leaving it on the default would make every axis label
     # visibly different from its surrounding text.
@@ -96,7 +104,7 @@ def price_chart(
     )
 
     # --- Moving averages ---
-    for period, colour in ((20, "#f5c542"), (50, "#4c8dff"), (200, "#c77dff")):
+    for period, colour in ((20, "#fbbf24"), (50, ACCENT), (200, "#a78bfa")):
         if len(df) >= period:
             ma = df["Close"].rolling(period).mean().iloc[-bars:]
             fig.add_trace(
@@ -110,12 +118,14 @@ def price_chart(
         mid = df["Close"].rolling(20).mean()
         sd = df["Close"].rolling(20).std()
         upper, lower = (mid + 2 * sd).iloc[-bars:], (mid - 2 * sd).iloc[-bars:]
+        # The envelope was drawn in hardcoded white, which is invisible on a
+        # light ground; GRID follows the mode.
         fig.add_trace(go.Scatter(x=view.index, y=upper, name="Bollinger",
-                                 line=dict(color="rgba(255,255,255,0.18)", width=1),
+                                 line=dict(color=GRID, width=1),
                                  showlegend=False), row=1, col=1)
         fig.add_trace(go.Scatter(x=view.index, y=lower, name="Bollinger",
-                                 line=dict(color="rgba(255,255,255,0.18)", width=1),
-                                 fill="tonexty", fillcolor="rgba(76,141,255,0.05)",
+                                 line=dict(color=GRID, width=1),
+                                 fill="tonexty", fillcolor="rgba(91,156,255,0.05)",
                                  showlegend=False), row=1, col=1)
 
     # --- Support / resistance ---
@@ -137,10 +147,13 @@ def price_chart(
             (setup["target_1"], UP, "Target 1"),
             (setup["target_2"], UP, "Target 2"),
         ):
+            # Left, and above the line: the price axis sits on the right, so a
+            # right-positioned label lands on top of the tick values and both
+            # became unreadable.
             fig.add_hline(
                 y=value, line=dict(color=colour, width=1.6, dash="dash"),
                 annotation_text=f"{label} {value:,.2f}",
-                annotation_position="right",
+                annotation_position="top left",
                 annotation_font=dict(color=colour, size=11),
                 row=1, col=1,
             )
@@ -166,7 +179,7 @@ def price_chart(
 
     fig.add_trace(
         go.Scatter(x=view.index, y=rsi, name="RSI(14)",
-                   line=dict(color="#f5c542", width=1.4)),
+                   line=dict(color="#fbbf24", width=1.4)),
         row=3, col=1,
     )
     for level, colour in ((70, DOWN), (30, UP)):
@@ -225,7 +238,7 @@ def portfolio_value(
         rebased = (other / float(other.iloc[0]) - 1) * 100
         fig.add_trace(go.Scatter(
             x=rebased.index, y=rebased, name=label, mode="lines",
-            line=dict(color=["#8b95a8", ACCENT, "#c77dff"][i % 3], width=1.4,
+            line=dict(color=["#94a3b8", ACCENT, "#a78bfa"][i % 3], width=1.4,
                       dash="dot"),
             hovertemplate=f"%{{y:+.2f}}%<extra>{label}</extra>",
         ))
@@ -259,8 +272,8 @@ def portfolio_value(
 def gauge(score: float, verdict: str) -> go.Figure:
     """Conviction dial coloured by verdict."""
     colour = {
-        "STRONG BUY": "#00c853", "BUY": "#66bb6a", "HOLD": "#f5c542",
-        "SELL": "#ef5350", "STRONG SELL": "#c62828",
+        "STRONG BUY": UP, "BUY": UP, "HOLD": WARN,
+        "SELL": DOWN, "STRONG SELL": DOWN,
     }.get(verdict, ACCENT)
 
     fig = go.Figure(
@@ -287,9 +300,11 @@ def gauge(score: float, verdict: str) -> go.Figure:
     return fig
 
 
+# Held to a similar lightness and saturation so no single holding shouts
+# louder than the rest purely because of the colour it was assigned.
 SEGMENT_COLOURS = (
-    "#6aa5ff", "#45c17a", "#e0a83c", "#c77dff", "#4dd0c1",
-    "#f2645a", "#8b95a8", "#f0a5c0", "#9ad36b", "#ffb27a",
+    "#5b9cff", "#34d399", "#fbbf24", "#a78bfa", "#2dd4bf",
+    "#f87171", "#94a3b8", "#f0abfc", "#a3e635", "#fb923c",
 )
 
 
@@ -302,7 +317,7 @@ def donut(items: dict[str, float], centre_label: str = "") -> go.Figure:
         labels=labels, values=values, hole=0.62, sort=False,
         marker=dict(colors=[SEGMENT_COLOURS[i % len(SEGMENT_COLOURS)]
                             for i in range(len(labels))],
-                    line=dict(color="#0a0c10", width=2)),
+                    line=dict(color=SURFACE, width=2)),
         textinfo="none",
         hovertemplate="%{label}<br>%{value:.1f}%<extra></extra>",
     ))
@@ -329,7 +344,7 @@ def correlation_heatmap(corr: pd.DataFrame) -> go.Figure | None:
         z=corr.values, x=list(corr.columns), y=list(corr.index),
         # Diverging around zero: negative correlation is a different thing
         # from weak correlation, and a single-hue ramp would hide that.
-        colorscale=[[0.0, "#4d7fd6"], [0.5, "#141922"], [1.0, "#f2645a"]],
+        colorscale=[[0.0, ACCENT], [0.5, SURFACE], [1.0, DOWN]],
         zmid=0, zmin=-1, zmax=1,
         xgap=2, ygap=2,
         hovertemplate="%{y} vs %{x}<br>%{z:.2f}<extra></extra>",
