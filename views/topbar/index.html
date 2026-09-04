@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<!--
+  Two jobs on the top bar, both of which need the real document.
+
+  1. Hide the navigation on the way down and restore it on the way up.
+  2. Move the Settings control out of the page and into the header, beside the
+     other header actions.
+
+  The second is a DOM move rather than a Streamlit layout, because Streamlit
+  offers no way to render a widget into its own header. Trying to make it look
+  like it belonged there while it still sat in the page cost a row of content
+  space on every page, and no amount of CSS fixes that - the element is simply
+  in the wrong place. Moving it is the honest version.
+
+  Streamlit re-renders on every script run and can put the node back where it
+  came from, so an observer watches for that and moves it again. React tolerates
+  this because the node is only relocated, never cloned or rebuilt.
+
+  This has to be a component: Streamlit strips scripts from markdown. The frame
+  is same-origin with the app, so it reaches the real document from here.
+-->
+<meta charset="utf-8" />
+<script>
+  function post(type, extra) {
+    window.parent.postMessage(
+      Object.assign({ isStreamlitMessage: true, type: type }, extra || {}), "*"
+    );
+  }
+  post("streamlit:componentReady", { apiVersion: 1 });
+  post("streamlit:setFrameHeight", { height: 0 });
+
+  (function () {
+    var doc, win;
+    try {
+      win = window.parent;
+      doc = win.document;
+    } catch (err) {
+      return; // Cross-origin: leave the chrome as Streamlit rendered it.
+    }
+
+    var HIDE_CLASS = "nav-hidden";
+    var ARM_AT = 90;   // far enough down not to flicker while the page settles
+    var DEADZONE = 6;  // a trackpad reports a pixel each way; ignore that
+
+    function header() {
+      return doc.querySelector('[data-testid="stHeader"]');
+    }
+
+    function scroller() {
+      return doc.querySelector('[data-testid="stMain"]') || doc.scrollingElement;
+    }
+
+    // --- Settings into the header ----------------------------------------
+
+    // The header lays out as one space-between row: a spacer, the navigation,
+    // and the action cluster holding Fork and the menu. Settings belongs at
+    // the front of that cluster.
+    function actionCluster() {
+      var head = header();
+      if (!head) return null;
+      var divs = head.getElementsByTagName("div");
+      for (var i = 0; i < divs.length; i++) {
+        var style = win.getComputedStyle(divs[i]);
+        if (style.justifyContent === "space-between" && divs[i].children.length >= 3) {
+          return divs[i].lastElementChild;
+        }
+      }
+      return null;
+    }
+
+    function placeSettings() {
+      var bar = doc.querySelector(".st-key-settings_bar");
+      var host = actionCluster();
+      if (!bar || !host || bar.parentElement === host) return;
+      host.insertBefore(bar, host.firstChild);
+      bar.setAttribute("data-in-topbar", "1");
+    }
+
+    // --- Hiding on scroll --------------------------------------------------
+
+    var lastY = 0;
+    // Throttled on a clock rather than requestAnimationFrame. rAF is the usual
+    // choice for scroll work, but browsers pause it whenever the document is
+    // not being composited - a background tab - and the handler would then
+    // never run, leaving the bar stuck in whichever state it was last in.
+    var MIN_GAP_MS = 60;
+    var lastRun = 0;
+
+    function apply() {
+      var el = scroller();
+      var head = header();
+      if (!el || !head) return;
+
+      var y = el.scrollTop;
+      var delta = y - lastY;
+
+      // Near the top the bar is always shown, whatever direction the last
+      // movement was. Deciding purely on direction left it stuck off-screen
+      // after a jump back to the top, which is exactly where it has to be
+      // visible, because that jump is one event and the state never reset.
+      if (y <= ARM_AT) {
+        head.classList.remove(HIDE_CLASS);
+        lastY = y;
+        return;
+      }
+
+      if (Math.abs(delta) < DEADZONE) return;
+      if (delta > 0) {
+        head.classList.add(HIDE_CLASS);
+      } else {
+        head.classList.remove(HIDE_CLASS);
+      }
+      lastY = y;
+    }
+
+    function onScroll() {
+      var now = Date.now();
+      if (now - lastRun < MIN_GAP_MS) return;
+      lastRun = now;
+      apply();
+    }
+
+    // Runs on every mount so a rerun re-homes the control immediately.
+    placeSettings();
+
+    // The bind guard covers only the listeners, which must not stack up; the
+    // placement above is idempotent and deliberately repeats.
+    if (win.__topbarBound) return;
+
+    // Listen on the document in the capture phase rather than on the scroll
+    // container. Scroll events do not bubble but are visible going down, so
+    // this catches the container whenever Streamlit creates it, and survives
+    // React replacing it later.
+    doc.addEventListener("scroll", onScroll, { capture: true, passive: true });
+
+    // Streamlit can re-insert the settings node where it was declared, so put
+    // it back whenever the tree changes. Debounced, because a rerun produces a
+    // burst of mutations and the work only needs doing once per burst.
+    var pending = null;
+    var observer = new win.MutationObserver(function () {
+      if (pending) return;
+      pending = win.setTimeout(function () {
+        pending = null;
+        placeSettings();
+      }, 50);
+    });
+    var root = doc.querySelector('[data-testid="stAppViewContainer"]') || doc.body;
+    if (root) observer.observe(root, { childList: true, subtree: true });
+
+    win.__topbarBound = true;
+    var initial = scroller();
+    if (initial) lastY = initial.scrollTop;
+  })();
+</script>

@@ -30,26 +30,27 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-_SCROLLNAV_DIR = Path(__file__).parent / "scrollnav"
-_scrollnav: Any = None
+_TOPBAR_DIR = Path(__file__).parent / "topbar"
+_topbar: Any = None
 
 
-def scroll_nav() -> None:
-    """Mount the listener that hides the top nav on the way down.
+def top_bar() -> None:
+    """Mount the header behaviour: hide-on-scroll, and Settings in the header.
 
     A component rather than a script tag because Streamlit strips scripts from
-    markdown. It renders nothing; failure here costs the auto-hide and nothing
-    else, so it never raises into the page.
+    markdown. It renders nothing; if it fails the app still works, losing only
+    the auto-hide and leaving Settings where it was declared, so it never
+    raises into the page.
     """
-    global _scrollnav
+    global _topbar
     try:
         import streamlit.components.v1 as components
 
-        if _scrollnav is None:
-            _scrollnav = components.declare_component(
-                "stock_analyzer_scrollnav", path=str(_SCROLLNAV_DIR)
+        if _topbar is None:
+            _topbar = components.declare_component(
+                "stock_analyzer_topbar", path=str(_TOPBAR_DIR)
             )
-        _scrollnav(key="_scrollnav")
+        _topbar(key="_topbar")
     except Exception:
         pass
 
@@ -661,7 +662,7 @@ def css(mode: str = "dark") -> str:
 
   /* The header carries the navigation now. Sticky rather than fixed so it
      participates in layout, and translated out of view by the scroll listener
-     in views/scrollnav rather than by a media query. */
+     in views/topbar rather than by a media query. */
   [data-testid="stHeader"] {{
     position: sticky; top: 0; z-index: 90;
     background: var(--ground);
@@ -703,7 +704,7 @@ def css(mode: str = "dark") -> str:
      block's 16px gap. Three of them stacked - the stylesheet, the storage
      bridge and the scroll listener - put 48px of dead space above the page
      title before anything visible was laid out. */
-  [data-testid="stElementContainer"]:has(iframe[title$="stock_analyzer_scrollnav"]),
+  [data-testid="stElementContainer"]:has(iframe[title$="stock_analyzer_topbar"]),
   [data-testid="stElementContainer"]:has(iframe[title$="stock_analyzer_localstore"]),
   /* Matched tightly - a markdown block whose direct child is a style tag,
      which is how this stylesheet itself is injected. A bare :has(style) would
@@ -714,29 +715,41 @@ def css(mode: str = "dark") -> str:
     display: none !important;
   }}
 
-  /* The settings row.
-     The button is a flex item in a stretch row, so `height: auto` still
-     resolves to whatever the row grew to - 167px for a one-word label. Every
-     level of the chain is collapsed and the button clamped outright, which is
-     blunt but scoped to this one container and does not depend on working out
-     which ancestor decided on the height. */
-  .st-key-settings_bar {{
-    margin-bottom: -.35rem;
+  /* Settings, once views/topbar has moved it into the header.
+     Until that runs it is hidden rather than shown in the page: a control that
+     appears in the content for a frame and then jumps to the header is worse
+     than one that simply arrives in the right place. */
+  .st-key-settings_bar {{ display: none !important; }}
+  .st-key-settings_bar[data-in-topbar] {{
+    display: flex !important;
     align-items: center !important;
-    min-height: 0 !important;
+    width: auto !important; min-height: 0 !important;
+    margin: 0 .5rem 0 0 !important; padding: 0 !important;
   }}
-  .st-key-settings_bar [data-testid="stLayoutWrapper"],
-  .st-key-settings_bar [data-testid="stPopover"] {{
-    height: auto !important; min-height: 0 !important;
+  /* Every level between the container and the button collapses, or the button
+     stretches to whatever the flex chain decided - which is how a one-word
+     label ended up 167px tall in the page. */
+  .st-key-settings_bar[data-in-topbar] [data-testid="stLayoutWrapper"],
+  .st-key-settings_bar[data-in-topbar] [data-testid="stPopover"],
+  .st-key-settings_bar[data-in-topbar] [data-testid="stVerticalBlock"] {{
+    height: auto !important; min-height: 0 !important; width: auto !important;
     align-items: center !important;
   }}
-  .st-key-settings_bar [data-testid="stPopoverButton"] {{
-    height: 38px !important; min-height: 38px !important;
-    max-height: 38px !important; align-self: center !important;
+  .st-key-settings_bar[data-in-topbar] [data-testid="stPopoverButton"] {{
+    height: 32px !important; min-height: 32px !important;
+    max-height: 32px !important; align-self: center !important;
+    padding: 0 .7rem !important; font-size: .82rem !important;
+    background: transparent !important; border-color: transparent !important;
+    white-space: nowrap;
   }}
-  .st-key-settings_bar [data-testid="stPopoverButton"] [data-testid="stMarkdownContainer"],
-  .st-key-settings_bar [data-testid="stPopoverButton"] p {{
+  .st-key-settings_bar[data-in-topbar] [data-testid="stPopoverButton"]:hover {{
+    background: var(--glass-hi) !important;
+  }}
+  .st-key-settings_bar[data-in-topbar] [data-testid="stPopoverButton"] p,
+  .st-key-settings_bar[data-in-topbar] [data-testid="stPopoverButton"]
+    [data-testid="stMarkdownContainer"] {{
     height: auto !important; max-height: 100% !important;
+    line-height: 1 !important;
   }}
 
   /* Settings sits at the top right of the content, level with the page title

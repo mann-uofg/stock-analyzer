@@ -25,7 +25,7 @@ st.set_page_config(
 )
 
 from analyzer import charts, llm, store  # noqa: E402
-from views.theme import css, scroll_nav  # noqa: E402
+from views.theme import css, top_bar  # noqa: E402
 
 # An escape hatch, reachable as ?reset=1.
 #
@@ -54,8 +54,9 @@ if "appearance" not in st.session_state:
 st.markdown(css(st.session_state.appearance), unsafe_allow_html=True)
 charts.set_mode(st.session_state.appearance)
 
-# Hides the top navigation on the way down, restores it on the way up.
-scroll_nav()
+# Header behaviour: hides the navigation on the way down and restores it on
+# the way up, and lifts Settings out of the page into the header itself.
+top_bar()
 
 from views import earnings as earnings_view  # noqa: E402
 from views import news as news_view  # noqa: E402
@@ -91,14 +92,13 @@ if st.session_state.pop("_was_reset", False):
         "Settings if you have one."
     )
 
-# Settings live behind one control on the right of every page. They are read
-# rarely - appearance once, the data export when moving machines - so they do
-# not warrant permanent screen space now that the sidebar is gone.
-# A right-aligned container rather than a spacer column. As columns the row
-# stretched to 167px for a single button - the popover button is a flex item in
-# a stretch row, so it grew to the row height and dragged the page title down
-# with it. A keyed container aligns natively and gives the stylesheet a stable
-# hook that does not depend on an emotion hash.
+# Settings are read rarely - appearance once, the data export when moving
+# machines - so they do not warrant a row of every page.
+#
+# Declared here, but views/topbar moves it into the header on mount, so it
+# costs the page no vertical space at all. Streamlit cannot render a widget
+# into its own header, and every attempt to make this look at home while it
+# still sat in the content cost a row on every page.
 with st.container(key="settings_bar", horizontal=True,
                   horizontal_alignment="right"):
     with st.popover("Settings"):
