@@ -714,13 +714,29 @@ def css(mode: str = "dark") -> str:
     display: none !important;
   }}
 
-  /* The settings row: flush to the top, and the button its natural size. */
-  .st-key-settings_bar {{ margin-bottom: -.35rem; }}
-  .st-key-settings_bar [data-testid="stPopoverButton"] {{
-    height: auto !important; min-height: 38px;
+  /* The settings row.
+     The button is a flex item in a stretch row, so `height: auto` still
+     resolves to whatever the row grew to - 167px for a one-word label. Every
+     level of the chain is collapsed and the button clamped outright, which is
+     blunt but scoped to this one container and does not depend on working out
+     which ancestor decided on the height. */
+  .st-key-settings_bar {{
+    margin-bottom: -.35rem;
+    align-items: center !important;
+    min-height: 0 !important;
   }}
+  .st-key-settings_bar [data-testid="stLayoutWrapper"],
+  .st-key-settings_bar [data-testid="stPopover"] {{
+    height: auto !important; min-height: 0 !important;
+    align-items: center !important;
+  }}
+  .st-key-settings_bar [data-testid="stPopoverButton"] {{
+    height: 38px !important; min-height: 38px !important;
+    max-height: 38px !important; align-self: center !important;
+  }}
+  .st-key-settings_bar [data-testid="stPopoverButton"] [data-testid="stMarkdownContainer"],
   .st-key-settings_bar [data-testid="stPopoverButton"] p {{
-    height: auto !important;
+    height: auto !important; max-height: 100% !important;
   }}
 
   /* Settings sits at the top right of the content, level with the page title
