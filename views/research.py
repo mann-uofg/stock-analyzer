@@ -28,6 +28,7 @@ from .common import (
     finding,
     fmt,
     gauge_grid,
+    logo,
     md_safe,
     meter,
     money,
@@ -146,7 +147,8 @@ def _header(payload: dict, call: dict, horizons: dict) -> None:
         # Ticker is typed by the user and the profile fields come from Yahoo;
         # both are rendered through unsafe_allow_html, so both are escaped.
         html(
-            f"<div class='hero-name'><h1>{escape(payload['meta']['ticker'])}</h1>"
+            f"<div class='hero-name'>{logo(payload['meta']['ticker'], 34)}"
+            f"<h1>{escape(payload['meta']['ticker'])}</h1>"
             f"<span class='hero-price num'>{fmt(quote_block.get('spot'))}</span></div>"
             f"<div class='hero-sub'>"
             f"{' · '.join(escape(b) for b in bits if b)}</div>"

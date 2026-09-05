@@ -143,3 +143,53 @@ class TestSharedComponents:
     def test_finding_escapes_title_and_body(self):
         out = finding("note", XSS, XSS)
         assert "<img" not in out
+
+
+class TestTickerLogo:
+    """The mark is built from a ticker, which reaches a URL and the page."""
+
+    def test_monogram_uses_the_root_symbol(self):
+        from views.common import logo
+        # "SHOP.TO" is Shopify; initials taken after the split would read "TO".
+        assert ">SH<" in logo("SHOP.TO")
+        assert ">BR<" in logo("BRK-B")
+
+    def test_the_full_symbol_reaches_the_url(self):
+        from views.common import logo
+        assert "SHOP.TO.png" in logo("SHOP.TO")
+
+    def test_lowercase_is_normalised(self):
+        from views.common import logo
+        assert "NVDA.png" in logo("nvda")
+
+    @pytest.mark.parametrize("hostile", [
+        "AAPL'><script>alert(1)</script>",
+        "AAPL\" onerror=\"alert(1)",
+        "../../etc/passwd",
+        "AAPL/../../x",
+    ])
+    def test_hostile_symbols_cannot_escape_the_attribute(self, hostile):
+        from views.common import logo
+        out = logo(hostile)
+        assert "<script" not in out
+        assert "onerror=" not in out
+        # Nothing but ticker characters survives into the src.
+        assert "/../" not in out
+
+    def test_a_symbol_of_only_punctuation_renders_nothing(self):
+        from views.common import logo
+        assert logo("///") == ""
+
+    @pytest.mark.parametrize("blank", ["", "   ", None])
+    def test_blank_symbol_renders_nothing(self, blank):
+        from views.common import logo
+        assert logo(blank) == ""
+
+    def test_alt_is_empty_so_a_failed_fetch_shows_the_monogram(self):
+        # With alt text, a 404 would print the alt over the initials.
+        from views.common import logo
+        assert "alt=''" in logo("AAPL")
+
+    def test_size_is_an_integer_in_the_style(self):
+        from views.common import logo
+        assert "--tik:30px" in logo("AAPL", 30)

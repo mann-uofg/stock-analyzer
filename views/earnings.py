@@ -24,6 +24,8 @@ import streamlit as st
 
 from analyzer import earnings as earn, interpret, store
 
+from .theme import scroll_to
+
 from .common import (
     earnings_brief,
     escape,
@@ -31,6 +33,7 @@ from .common import (
     fmt,
     gauge_grid,
     html,
+    logo,
     money,
     plain_summary,
     quote,
@@ -114,6 +117,7 @@ def _company_row(row: dict[str, Any], followed: bool) -> str:
     return (
         f"<div class='earn-card'>"
         f"<div class='earn-head'>"
+        f"{logo(row['symbol'], 24)}"
         f"<span class='row-sym'>{escape(row['symbol'])}</span>{held}"
         f"<span class='pill {SESSION_TONE.get(session, 'hold')}'>"
         f"{escape(SESSION_SHORT.get(session, 'Time TBC'))}</span></div>"
@@ -351,6 +355,10 @@ def render() -> None:
 
     if selected := st.session_state.get("_earn_symbol"):
         st.divider()
+        # The anchor the scroller aims at. Opening a company renders its detail
+        # below the whole list, which read as the button doing nothing at all.
+        html("<div class='earn-anchor'></div>")
+        scroll_to("earn-anchor", f"{chosen}:{selected}")
         listing = next((r for r in listings if r["symbol"] == selected), None)
         _detail(selected, listing)
 

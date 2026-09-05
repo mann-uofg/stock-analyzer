@@ -16,6 +16,7 @@ from .common import (
     fmt,
     holding_rows,
     html,
+    logo,
     pill,
     screen,
     screen_pending,
@@ -175,8 +176,10 @@ def _table(symbols: tuple[str, ...], horizon_key: str, notes: dict[str, str]) ->
         rich.append({
             "weight_pct": score,
             "cells": (
+                f"<div class='row-sym-wrap'>{logo(row['symbol'])}"
                 f"<div><div class='row-sym'>{escape(row['symbol'])}</div>"
-                f"<div class='row-name'>{escape((row.get('name') or '')[:22])}</div></div>"
+                f"<div class='row-name'>{escape((row.get('name') or '')[:22])}"
+                f"</div></div></div>"
                 f"<div>{sparkline(sparks.get(row['symbol']))}</div>"
                 f"<div><div class='row-num'>{fmt(row.get('price'))}</div>"
                 f"<div class='row-sub {tone}'>{fmt(change, 2, '%', signed=True)}</div></div>"

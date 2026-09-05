@@ -31,6 +31,7 @@ from .common import (
     finding,
     holding_rows,
     html,
+    logo,
     pill,
     ring,
     ring_row,
@@ -368,8 +369,10 @@ def _analysis(positions: tuple[dict, ...]) -> None:
         rich.append({
             "weight_pct": row.get("weight_pct"),
             "cells": (
+                f"<div class='row-sym-wrap'>{logo(row['symbol'])}"
                 f"<div><div class='row-sym'>{escape(row['symbol'])}</div>"
-                f"<div class='row-name'>{escape((info.get('name') or '')[:22])}</div></div>"
+                f"<div class='row-name'>{escape((info.get('name') or '')[:22])}"
+                f"</div></div></div>"
                 f"<div>{sparkline(sparks.get(row['symbol']))}</div>"
                 f"<div><div class='row-num'>{fmt(row.get('price'))}</div>"
                 f"<div class='row-sub'>{row.get('currency') or ''}</div></div>"

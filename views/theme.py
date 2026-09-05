@@ -31,7 +31,32 @@ from pathlib import Path
 from typing import Any
 
 _TOPBAR_DIR = Path(__file__).parent / "topbar"
+_SCROLLTO_DIR = Path(__file__).parent / "scrollto"
 _topbar: Any = None
+_scrollto: Any = None
+
+
+def scroll_to(target: str, nonce: str) -> None:
+    """Scroll to the element carrying class ``target`` when ``nonce`` changes.
+
+    Streamlit cannot move the viewport, so opening a panel below a long list
+    looked like nothing had happened. Keyed on the nonce so it fires once per
+    selection rather than on every rerun, which would drag the page back under
+    the reader.
+    """
+    global _scrollto
+    if not target or not nonce:
+        return
+    try:
+        import streamlit.components.v1 as components
+
+        if _scrollto is None:
+            _scrollto = components.declare_component(
+                "stock_analyzer_scrollto", path=str(_SCROLLTO_DIR)
+            )
+        _scrollto(target=target, nonce=str(nonce), key="_scrollto")
+    except Exception:
+        pass
 
 
 def top_bar() -> None:
@@ -415,6 +440,36 @@ def css(mode: str = "dark") -> str:
                     padding: .8rem 1rem; margin: .2rem 0 .9rem;
                     border-radius: var(--r-md); background: var(--glass);
                     border: 1px solid var(--glass-edge); }}
+
+  /* The scroll target sits below a sticky header, so it needs to stop clear
+     of it rather than under it. */
+  .earn-anchor {{ scroll-margin-top: 84px; height: 0; }}
+  [data-testid="stElementContainer"]:has(iframe[title$="stock_analyzer_scrollto"]) {{
+    display: none !important;
+  }}
+
+  /* ---------- Ticker marks ------------------------------------------------ */
+
+  /* The monogram is drawn first and the logo laid over it, so a symbol with no
+     logo shows its initials rather than a gap or a broken image. */
+  .tik {{
+    position: relative; display: inline-block; flex: none;
+    width: var(--tik, 22px); height: var(--tik, 22px);
+    border-radius: 6px; overflow: hidden; vertical-align: middle;
+  }}
+  .tik-mono {{
+    position: absolute; inset: 0; display: grid; place-items: center;
+    background: var(--glass-hi); color: var(--faint);
+    font-size: calc(var(--tik, 22px) * .40); font-weight: 700;
+    letter-spacing: -.02em; line-height: 1;
+  }}
+  .tik-img {{
+    position: absolute; inset: 0; width: 100%; height: 100%;
+    object-fit: contain; background: #fff;
+  }}
+
+  /* A row's symbol and its mark sit on one line. */
+  .row-sym-wrap {{ display: flex; align-items: center; gap: .5rem; }}
 
   /* ---------- Earnings calendar ------------------------------------------- */
 

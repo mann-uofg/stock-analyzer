@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<!--
+  Scrolls the page to an anchor when the thing it points at changes.
+
+  Opening a company on the earnings page renders its detail below a long list,
+  so the click appeared to do nothing at all until you happened to scroll down
+  and find it. Streamlit has no way to move the viewport, and a script in
+  markdown is stripped, so this does it from a same-origin frame.
+
+  It scrolls only when the nonce changes - the symbol that was opened. Without
+  that guard every rerun would yank the page back, which is worse than not
+  scrolling: it would fight the reader while they were reading.
+-->
+<meta charset="utf-8" />
+<script>
+  function post(type, extra) {
+    window.parent.postMessage(
+      Object.assign({ isStreamlitMessage: true, type: type }, extra || {}), "*"
+    );
+  }
+
+  (function () {
+    var doc, win;
+    try {
+      win = window.parent;
+      doc = win.document;
+    } catch (err) {
+      return; // Cross-origin: no scrolling, but nothing breaks either.
+    }
+
+    window.addEventListener("message", function (event) {
+      var data = event.data;
+      if (!data || data.type !== "streamlit:render") return;
+      var args = data.args || {};
+      if (!args.target || !args.nonce) return;
+
+      // One scroll per selection, not one per rerun.
+      if (win.__scrollToLast === args.nonce) return;
+      win.__scrollToLast = args.nonce;
+
+      // The panel is still being laid out when this message arrives, so the
+      // anchor's position is not final for another frame or two.
+      win.setTimeout(function () {
+        var el = doc.querySelector("." + args.target);
+        if (el && el.scrollIntoView) {
+          el.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
+      }, 150);
+    });
+
+    post("streamlit:componentReady", { apiVersion: 1 });
+    post("streamlit:setFrameHeight", { height: 0 });
+  })();
+</script>

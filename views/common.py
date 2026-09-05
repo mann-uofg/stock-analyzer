@@ -178,6 +178,43 @@ def safe_href(url: Any) -> str | None:
     return _escape(candidate)
 
 
+_LOGO_URL = "https://financialmodelingprep.com/image-stock/{symbol}.png"
+_LOGO_SAFE = re.compile(r"[^A-Z0-9.\-^]")
+
+
+def logo(symbol: Any, size: int = 22) -> str:
+    """A company's mark, with its own initials behind it.
+
+    The monogram is not a placeholder shown while loading - it is drawn first
+    and the image sits on top of it. Anything without a logo (an index, a
+    currency pair, a small listing the provider has never heard of) simply
+    leaves the initials showing, with no request to check first and no broken
+    image to hide. The ``alt`` is deliberately empty so a failed fetch renders
+    as nothing rather than as alt text over the monogram.
+
+    Logos are fetched by the reader's browser from a third party, which
+    therefore learns which tickers were looked at. That is the cost of having
+    them at all; the app itself never requests them.
+    """
+    text = str(symbol or "").strip().upper()
+    if not text:
+        return ""
+    # The part before an exchange suffix or share class reads best as initials:
+    # "SHOP.TO" is Shopify, not "SH".
+    root = re.split(r"[.\-]", text)[0] or text
+    initials = _escape(root[:2])
+    safe = _LOGO_SAFE.sub("", text)
+    if not safe:
+        return ""
+    src = _escape(_LOGO_URL.format(symbol=safe))
+    return (
+        f"<span class='tik' style='--tik:{int(size)}px'>"
+        f"<span class='tik-mono'>{initials}</span>"
+        f"<img class='tik-img' src='{src}' alt='' loading='lazy'>"
+        f"</span>"
+    )
+
+
 def verdict_chip(verdict: str | None, subtitle: str = "") -> str:
     """The headline call, coloured by direction rather than by strength."""
     tone = "hold"
