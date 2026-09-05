@@ -38,14 +38,29 @@
       if (win.__scrollToLast === args.nonce) return;
       win.__scrollToLast = args.nonce;
 
-      // The panel is still being laid out when this message arrives, so the
-      // anchor's position is not final for another frame or two.
-      win.setTimeout(function () {
+      // One scroll is not enough. The panel below the anchor takes seconds to
+      // build - it fetches an option chain - and Streamlit resets the scroll
+      // position on each rerun in the meantime, undoing it. So this keeps
+      // asking until the anchor is actually on screen.
+      //
+      // It stops the moment the anchor is in the upper half of the viewport,
+      // which is also what happens if the reader scrolls there themselves, so
+      // it cannot end up fighting them for the page.
+      var attempts = 0;
+
+      function settle() {
         var el = doc.querySelector("." + args.target);
-        if (el && el.scrollIntoView) {
-          el.scrollIntoView({ behavior: "smooth", block: "start" });
+        if (el) {
+          var top = el.getBoundingClientRect().top;
+          if (top >= 0 && top < win.innerHeight * 0.5) return;  // arrived
+          // Instant, not smooth: a smooth scroll interrupted by the next
+          // rerun leaves the page halfway and looks broken.
+          el.scrollIntoView({ block: "start" });
         }
-      }, 150);
+        if (++attempts < 24) win.setTimeout(settle, 400);
+      }
+
+      win.setTimeout(settle, 150);
     });
 
     post("streamlit:componentReady", { apiVersion: 1 });
